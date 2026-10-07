@@ -268,6 +268,7 @@ class TacticalServer:
             return
 
         TacticalAPIHandler.server_instance = self
+        ThreadingHTTPServer.allow_reuse_address = True
         self.httpd = ThreadingHTTPServer((self.host, self.port), TacticalAPIHandler)
         self.running = True
 
