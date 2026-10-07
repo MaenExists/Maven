@@ -71,12 +71,17 @@ def run_gui_app(host: str, port: int) -> None:
     app.setApplicationName("Maven")
     app.setOrganizationName("MavenOps")
 
-    # Bridge setup
+    from PySide6.QtWebChannel import QWebChannel
+
+    # Bridge & WebChannel setup
     bridge = MavenBridge()
+    web_channel = QWebChannel()
+    web_channel.registerObject("mavenBridge", bridge)
 
     # QML Engine setup
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("mavenBridge", bridge)
+    engine.rootContext().setContextProperty("webEngineChannel", web_channel)
 
     qml_file = os.path.join(os.path.dirname(__file__), "qml", "Main.qml")
     engine.load(QUrl.fromLocalFile(qml_file))

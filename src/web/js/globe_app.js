@@ -207,7 +207,7 @@ class MavenGlobeApp {
     }
 
     _initQtWebChannel() {
-        if (typeof QWebChannel !== 'undefined') {
+        if (typeof QWebChannel !== 'undefined' && typeof qt !== 'undefined' && qt.webChannelTransport) {
             new QWebChannel(qt.webChannelTransport, (channel) => {
                 window.mavenBridge = channel.objects.mavenBridge;
                 console.log('Qt WebChannel connected to Python bridge');

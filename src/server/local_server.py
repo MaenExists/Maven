@@ -104,42 +104,42 @@ class TacticalAPIHandler(SimpleHTTPRequestHandler):
             self._send_json({
                 "count": len(srv.flights),
                 "data": srv.flights,
-                "geojson": srv.flight_collector.to_geojson(),
+                "geojson": srv._to_geojson(srv.flights),
             })
 
         elif path == "/api/vessels":
             self._send_json({
                 "count": len(srv.vessels),
                 "data": srv.vessels,
-                "geojson": srv.maritime_collector.to_geojson(),
+                "geojson": srv._to_geojson(srv.vessels),
             })
 
         elif path == "/api/wildfires":
             self._send_json({
                 "count": len(srv.wildfires),
                 "data": srv.wildfires,
-                "geojson": srv.wildfire_collector.to_geojson(),
+                "geojson": srv._to_geojson(srv.wildfires),
             })
 
         elif path == "/api/earthquakes":
             self._send_json({
                 "count": len(srv.earthquakes),
                 "data": srv.earthquakes,
-                "geojson": srv.earthquake_collector.to_geojson(),
+                "geojson": srv._to_geojson(srv.earthquakes),
             })
 
         elif path == "/api/cameras":
             self._send_json({
                 "count": len(srv.cameras),
                 "data": srv.cameras,
-                "geojson": srv.camera_collector.to_geojson(),
+                "geojson": srv._to_geojson(srv.cameras),
             })
 
         elif path == "/api/conflicts":
             self._send_json({
                 "count": len(srv.conflicts),
                 "data": srv.conflicts,
-                "geojson": srv.conflict_collector.to_geojson(),
+                "geojson": srv._to_geojson(srv.conflicts),
             })
 
         elif path == "/api/weather":
@@ -276,10 +276,19 @@ class TacticalServer:
         self.thread.start()
         logger.info("Tactical server listening at http://%s:%d", self.host, self.port)
 
-        # Initial fetch
-        self.refresh_all_telemetry()
+        # Pre-seed initial telemetry so server responds in < 2ms immediately
+        self.flights = self.flight_collector._generate_tactical_fleet()
+        self.vessels = self.maritime_collector.cached_vessels
+        self.wildfires = self.wildfire_collector._generate_fallback_wildfires()
+        self.earthquakes = self.earthquake_collector._generate_fallback_earthquakes()
+        self.cameras = list(self.camera_collector.GLOBAL_LANDMARK_CAMS)
+        self.conflicts = self.conflict_collector.fetch_live_incidents()
+        self.weather_grid = [
+            {"name": h["name"], "latitude": h["lat"], "longitude": h["lon"], "temperature_c": 20.0, "wind_speed_kmh": 15.0, "wind_direction_deg": 180.0}
+            for h in self.weather_collector.HUBS
+        ]
 
-        # Start periodic background polling
+        # Start live background polling thread
         self.poll_thread = threading.Thread(target=self._background_poll_loop, daemon=True)
         self.poll_thread.start()
 
@@ -312,6 +321,20 @@ class TacticalServer:
             )
         except Exception as exc:
             logger.error("Error refreshing telemetry: %s", exc)
+
+    def _to_geojson(self, items: list) -> dict:
+        """Fast in-memory GeoJSON conversion."""
+        features = []
+        for item in items:
+            lon = item.get("longitude", 0.0)
+            lat = item.get("latitude", 0.0)
+            alt = item.get("altitude", 0.0)
+            features.append({
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [lon, lat, alt]},
+                "properties": item,
+            })
+        return {"type": "FeatureCollection", "features": features}
 
     def _background_poll_loop(self) -> None:
         """Periodic background refresh loop."""

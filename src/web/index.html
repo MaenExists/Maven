@@ -2,71 +2,30 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MAVEN // Geospatial Intelligence Globe</title>
-    <!-- CesiumJS CSS -->
+    <title>MAVEN Core Globe</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        html, body, #cesiumContainer {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #06090e;
+        }
+        .cesium-viewer-bottom,
+        .cesium-viewer-toolbar,
+        .cesium-viewer-animationContainer,
+        .cesium-viewer-timelineContainer,
+        .cesium-widget-credits {
+            display: none !important;
+        }
+    </style>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.146.0/Build/Cesium/Widgets/widgets.css">
-    <link rel="stylesheet" href="css/globe.css">
-    <!-- CesiumJS Script -->
     <script src="https://cdn.jsdelivr.net/npm/cesium@1.146.0/Build/Cesium/Cesium.js"></script>
-    <!-- Qt WebChannel (if loaded within PySide6 / QWebEngineView) -->
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 </head>
 <body>
-    <!-- 3D WebGL Globe Container -->
     <div id="cesiumContainer"></div>
 
-    <!-- Adversarial Atmospheric Vignette & Scanlines -->
-    <div class="vignette-overlay"></div>
-    <div class="scanlines-overlay"></div>
-    <div class="reticle-center"></div>
-
-    <!-- Live Telemetry Readout (Bottom Left) -->
-    <div class="hud-telemetry-bar">
-        <div class="hud-item"><span>COORD:</span><b id="hudCoords">25.0000° N, 15.0000° E</b></div>
-        <div class="hud-item"><span>ALT:</span><b id="hudAlt">22000 KM</b></div>
-        <div class="hud-item"><span>HDG:</span><b id="hudHeading">0°</b></div>
-        <div class="hud-item"><span>ENGINE:</span><b style="color: #10b981;">ONLINE</b></div>
-    </div>
-
-    <!-- Live Surveillance Feed Modal -->
-    <div id="cameraModal" class="tactical-modal-backdrop">
-        <div class="tactical-modal">
-            <div class="modal-header">
-                <div class="modal-title">LIVE SURVEILLANCE FEED // CLASSIFIED</div>
-                <button class="modal-close" onclick="window.mavenApp.closeCameraModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="cam-preview-frame">
-                    <div class="cam-rec-indicator">
-                        <div class="cam-rec-dot"></div>
-                        <span>LIVE</span>
-                    </div>
-                    <img id="modalCamImg" class="cam-preview-img" src="" alt="Surveillance Stream">
-                </div>
-                <div class="cam-meta-grid">
-                    <div class="cam-meta-row">
-                        <span class="cam-meta-label">UNIT ID:</span>
-                        <span id="modalCamTitle" class="cam-meta-value">TfL-CAM-808</span>
-                    </div>
-                    <div class="cam-meta-row">
-                        <span class="cam-meta-label">SECTOR:</span>
-                        <span id="modalCamLoc" class="cam-meta-value">Greater London, UK</span>
-                    </div>
-                    <div class="cam-meta-row">
-                        <span class="cam-meta-label">GEODETIC:</span>
-                        <span id="modalCamCoords" class="cam-meta-value">51.5074, -0.1278</span>
-                    </div>
-                    <div class="cam-meta-row">
-                        <span class="cam-meta-label">STATUS:</span>
-                        <span class="cam-meta-value" style="color: #10b981;">TRANSMITTING</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Application Core Scripts -->
     <script src="js/sound.js"></script>
     <script src="js/layers.js"></script>
     <script src="js/geofence_draw.js"></script>

@@ -15,10 +15,11 @@ Window {
     title: "MAVEN // Planetary Intelligence Operations Center"
     color: "#06090e"
 
-    // Cesium WebEngine 3D Globe Container
+    // Cesium WebGL 3D Globe Viewport
     WebEngineView {
         id: globeWebEngine
         anchors.fill: parent
+        webChannel: typeof webEngineChannel !== "undefined" ? webEngineChannel : null
         url: "http://127.0.0.1:8765/index.html"
         settings.javascriptEnabled: true
         settings.webGLEnabled: true
@@ -34,7 +35,7 @@ Window {
         anchors.right: parent.right
     }
 
-    // Top Operational Command Bar (Tool Dock)
+    // Top Operational Command Bar
     CommandBar {
         id: commandBar
         anchors.top: headerBar.bottom
@@ -77,7 +78,7 @@ Window {
         }
 
         onClearClicked: {
-            globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.measureTool.clear(); window.mavenApp.changeViewer.clear(); }");
+            globeWebEngine.runJavaScript("if (window.mavenApp) { if (window.mavenApp.measureTool) window.mavenApp.measureTool.clear(); if (window.mavenApp.changeViewer) window.mavenApp.changeViewer.clear(); }");
         }
     }
 
@@ -124,6 +125,46 @@ Window {
         }
     }
 
+    // Bottom Telemetry Coordinates & Altitude Bar
+    BottomTelemetryBar {
+        id: bottomTelemetryBar
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 12
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: Math.min(parent.width - 32, 540)
+    }
+
+    // Live Surveillance Camera Pop-out Modal
+    CameraModal {
+        id: cameraModal
+        anchors.centerIn: parent
+    }
+
+    // Periodic camera position polling for native bottom telemetry bar
+    Timer {
+        interval: 300
+        running: true
+        repeat: true
+        onTriggered: {
+            globeWebEngine.runJavaScript("(function() { " +
+                "if (!window.mavenApp || !window.mavenApp.viewer) return null; " +
+                "var cam = window.mavenApp.viewer.camera; " +
+                "var carto = cam.positionCartographic; " +
+                "var lon = Cesium.Math.toDegrees(carto.longitude).toFixed(4); " +
+                "var lat = Cesium.Math.toDegrees(carto.latitude).toFixed(4); " +
+                "var height = (carto.height / 1000).toFixed(0); " +
+                "var heading = Cesium.Math.toDegrees(cam.heading).toFixed(0); " +
+                "return { lat: lat, lon: lon, height: height, heading: heading }; " +
+            "})()", function(data) {
+                if (data) {
+                    bottomTelemetryBar.coords = data.lat + "° N, " + data.lon + "° E";
+                    bottomTelemetryBar.altitude = data.height + " KM";
+                    bottomTelemetryBar.heading = data.heading + "°";
+                }
+            });
+        }
+    }
+
     // Bridge signal handlers
     Connections {
         target: mavenBridge
@@ -132,7 +173,11 @@ Window {
         function onEntitySelected(entityType, entityId, jsonStr) {
             try {
                 var data = JSON.parse(jsonStr);
-                telemetryCard.showEntity(data);
+                if (entityType === "live_cam") {
+                    cameraModal.open(data);
+                } else {
+                    telemetryCard.showEntity(data);
+                }
             } catch (e) {
                 console.error("Error parsing entity JSON:", e);
             }
