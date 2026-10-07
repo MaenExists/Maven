@@ -51,6 +51,15 @@ def run_gui_app(host: str, port: int) -> None:
     from PySide6.QtQml import QQmlApplicationEngine
     from PySide6.QtWebEngineQuick import QtWebEngineQuick
 
+    # Configure GPU hardware acceleration and WebGL flags
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
+        "--enable-gpu-rasterization "
+        "--enable-zero-copy "
+        "--ignore-gpu-blocklist "
+        "--enable-webgl "
+        "--num-raster-threads=4"
+    )
+
     # Initialize QtWebEngine runtime
     QtWebEngineQuick.initialize()
 

@@ -1,6 +1,7 @@
 /**
  * Tactical Entity Layers & Billboard Collections
  * Manages aircraft, maritime vessels, fires, seismic shocks, surveillance cameras, and threats.
+ * Optimized with Canvas Glyph Texture Caching & In-Place Entity Updates for 60 FPS performance.
  */
 
 class TacticalLayersManager {
@@ -15,6 +16,9 @@ class TacticalLayersManager {
         this.cameraSource = new Cesium.CustomDataSource('cameras');
         this.conflictSource = new Cesium.CustomDataSource('conflicts');
         this.anomalySource = new Cesium.CustomDataSource('anomalies');
+
+        // Texture Cache to prevent GC pauses
+        this.iconCache = new Map();
 
         // Layer visibility flags
         this.visibility = {
@@ -43,17 +47,16 @@ class TacticalLayersManager {
     }
 
     _initClustering() {
-        // Configure screen space clustering for aircraft and cameras to avoid clutter
         const clusterSources = [this.flightSource, this.cameraSource, this.vesselSource];
         clusterSources.forEach(source => {
             source.clustering.enabled = true;
-            source.clustering.pixelRange = 35;
-            source.clustering.minimumClusterSize = 4;
+            source.clustering.pixelRange = 40;
+            source.clustering.minimumClusterSize = 5;
 
             source.clustering.clusterEvent.addEventListener((clusteredEntities, cluster) => {
                 cluster.label.show = true;
                 cluster.label.text = clusteredEntities.length.toString();
-                cluster.label.font = '12px "JetBrains Mono", monospace';
+                cluster.label.font = '11px "JetBrains Mono", monospace';
                 cluster.label.fillColor = Cesium.Color.fromCssColorString('#00f0ff');
                 cluster.label.outlineColor = Cesium.Color.BLACK;
                 cluster.label.outlineWidth = 2;
@@ -61,192 +64,221 @@ class TacticalLayersManager {
                 cluster.label.verticalOrigin = Cesium.VerticalOrigin.CENTER;
 
                 cluster.billboard.show = true;
-                cluster.billboard.image = this._createClusterIcon(clusteredEntities.length);
-                cluster.billboard.width = 32;
-                cluster.billboard.height = 32;
+                cluster.billboard.image = this._getClusterIcon(clusteredEntities.length);
+                cluster.billboard.width = 28;
+                cluster.billboard.height = 28;
             });
         });
     }
 
-    _createClusterIcon(count) {
+    _getClusterIcon(count) {
+        const key = 'cluster';
+        if (this.iconCache.has(key)) return this.iconCache.get(key);
+
         const canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 64;
+        canvas.width = 56;
+        canvas.height = 56;
         const ctx = canvas.getContext('2d');
 
         ctx.beginPath();
-        ctx.arc(32, 32, 28, 0, Math.PI * 2);
+        ctx.arc(28, 28, 24, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(6, 12, 24, 0.85)';
         ctx.fill();
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2.5;
         ctx.strokeStyle = '#00f0ff';
         ctx.stroke();
 
-        ctx.beginPath();
-        ctx.arc(32, 32, 22, 0, Math.PI * 2);
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]);
-        ctx.strokeStyle = 'rgba(0, 240, 255, 0.6)';
-        ctx.stroke();
-
+        this.iconCache.set(key, canvas);
         return canvas;
     }
 
-    _createFlightIcon(heading = 0, color = '#00f0ff') {
-        const canvas = document.createElement('canvas');
-        canvas.width = 36;
-        canvas.height = 36;
-        const ctx = canvas.getContext('2d');
+    _getFlightIcon(heading = 0, color = '#00f0ff') {
+        const roundedHeading = Math.round(heading / 10) * 10 % 360;
+        const key = `flight_${color}_${roundedHeading}`;
+        if (this.iconCache.has(key)) return this.iconCache.get(key);
 
-        ctx.translate(18, 18);
-        ctx.rotate((heading * Math.PI) / 180);
-
-        // Tactical Jet Glyph
-        ctx.beginPath();
-        ctx.moveTo(0, -14);
-        ctx.lineTo(12, 10);
-        ctx.lineTo(4, 7);
-        ctx.lineTo(4, 13);
-        ctx.lineTo(0, 10);
-        ctx.lineTo(-4, 13);
-        ctx.lineTo(-4, 7);
-        ctx.lineTo(-12, 10);
-        ctx.closePath();
-
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = '#050a14';
-        ctx.stroke();
-
-        return canvas;
-    }
-
-    _createVesselIcon(heading = 0) {
         const canvas = document.createElement('canvas');
         canvas.width = 32;
         canvas.height = 32;
         const ctx = canvas.getContext('2d');
 
         ctx.translate(16, 16);
-        ctx.rotate((heading * Math.PI) / 180);
+        ctx.rotate((roundedHeading * Math.PI) / 180);
 
         ctx.beginPath();
         ctx.moveTo(0, -12);
-        ctx.lineTo(7, 2);
-        ctx.lineTo(7, 12);
-        ctx.lineTo(-7, 12);
-        ctx.lineTo(-7, 2);
+        ctx.lineTo(10, 8);
+        ctx.lineTo(3, 5);
+        ctx.lineTo(3, 11);
+        ctx.lineTo(0, 8);
+        ctx.lineTo(-3, 11);
+        ctx.lineTo(-3, 5);
+        ctx.lineTo(-10, 8);
         ctx.closePath();
 
-        ctx.fillStyle = '#10b981';
+        ctx.fillStyle = color;
         ctx.fill();
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = '#022c22';
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = '#050a14';
         ctx.stroke();
 
+        this.iconCache.set(key, canvas);
         return canvas;
     }
 
-    _createCameraIcon() {
+    _getVesselIcon(heading = 0) {
+        const roundedHeading = Math.round(heading / 15) * 15 % 360;
+        const key = `vessel_${roundedHeading}`;
+        if (this.iconCache.has(key)) return this.iconCache.get(key);
+
         const canvas = document.createElement('canvas');
         canvas.width = 28;
         canvas.height = 28;
         const ctx = canvas.getContext('2d');
 
+        ctx.translate(14, 14);
+        ctx.rotate((roundedHeading * Math.PI) / 180);
+
+        ctx.beginPath();
+        ctx.moveTo(0, -10);
+        ctx.lineTo(6, 2);
+        ctx.lineTo(6, 10);
+        ctx.lineTo(-6, 10);
+        ctx.lineTo(-6, 2);
+        ctx.closePath();
+
+        ctx.fillStyle = '#10b981';
+        ctx.fill();
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = '#022c22';
+        ctx.stroke();
+
+        this.iconCache.set(key, canvas);
+        return canvas;
+    }
+
+    _getCameraIcon() {
+        const key = 'cam_icon';
+        if (this.iconCache.has(key)) return this.iconCache.get(key);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 26;
+        canvas.height = 26;
+        const ctx = canvas.getContext('2d');
+
         ctx.fillStyle = 'rgba(6, 12, 24, 0.9)';
-        ctx.fillRect(4, 8, 14, 12);
+        ctx.fillRect(4, 7, 13, 11);
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = '#38bdf8';
-        ctx.strokeRect(4, 8, 14, 12);
+        ctx.strokeRect(4, 7, 13, 11);
 
-        // Lens cone
         ctx.beginPath();
-        ctx.moveTo(18, 11);
-        ctx.lineTo(24, 7);
-        ctx.lineTo(24, 21);
-        ctx.lineTo(18, 17);
+        ctx.moveTo(17, 10);
+        ctx.lineTo(22, 6);
+        ctx.lineTo(22, 19);
+        ctx.lineTo(17, 15);
         ctx.closePath();
         ctx.fillStyle = '#38bdf8';
         ctx.fill();
 
+        this.iconCache.set(key, canvas);
         return canvas;
     }
 
-    _createHazardIcon() {
+    _getHazardIcon() {
+        const key = 'hazard_icon';
+        if (this.iconCache.has(key)) return this.iconCache.get(key);
+
         const canvas = document.createElement('canvas');
-        canvas.width = 32;
-        canvas.height = 32;
+        canvas.width = 28;
+        canvas.height = 28;
         const ctx = canvas.getContext('2d');
 
-        // Diamond warning
         ctx.beginPath();
-        ctx.moveTo(16, 2);
-        ctx.lineTo(30, 16);
-        ctx.lineTo(16, 30);
-        ctx.lineTo(2, 16);
+        ctx.moveTo(14, 2);
+        ctx.lineTo(26, 14);
+        ctx.lineTo(14, 26);
+        ctx.lineTo(2, 14);
         ctx.closePath();
 
-        ctx.fillStyle = 'rgba(255, 0, 85, 0.85)';
+        ctx.fillStyle = 'rgba(255, 0, 85, 0.9)';
         ctx.fill();
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 1.5;
         ctx.strokeStyle = '#ffffff';
         ctx.stroke();
 
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 16px "JetBrains Mono", monospace';
+        ctx.font = 'bold 14px "JetBrains Mono", monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('!', 16, 16);
+        ctx.fillText('!', 14, 14);
 
+        this.iconCache.set(key, canvas);
         return canvas;
     }
 
+    // In-place updates to avoid garbage collection hitches
     updateFlights(flights) {
         if (!this.visibility.flights) return;
-        this.flightSource.entities.removeAll();
+        const activeIds = new Set();
 
         flights.forEach(f => {
-            const color = f.squawk === '7700' ? '#ff0055' : (f.altitude > 10000 ? '#00f0ff' : '#f59e0b');
-            this.flightSource.entities.add({
-                id: f.id,
-                position: Cesium.Cartesian3.fromDegrees(f.longitude, f.latitude, f.altitude || 10000),
-                billboard: {
-                    image: this._createFlightIcon(f.heading, color),
-                    scale: 0.9,
-                    verticalOrigin: Cesium.VerticalOrigin.CENTER,
-                    heightReference: Cesium.HeightReference.NONE
-                },
-                properties: f
-            });
+            activeIds.add(f.id);
+            const pos = Cesium.Cartesian3.fromDegrees(f.longitude, f.latitude, f.altitude || 10000);
+            const existing = this.flightSource.entities.getById(f.id);
+
+            if (existing) {
+                existing.position = pos;
+                existing.properties = f;
+            } else {
+                const color = f.squawk === '7700' ? '#ff0055' : (f.altitude > 10000 ? '#00f0ff' : '#f59e0b');
+                this.flightSource.entities.add({
+                    id: f.id,
+                    position: pos,
+                    billboard: {
+                        image: this._getFlightIcon(f.heading, color),
+                        scale: 0.85,
+                        verticalOrigin: Cesium.VerticalOrigin.CENTER,
+                        heightReference: Cesium.HeightReference.NONE
+                    },
+                    properties: f
+                });
+            }
         });
     }
 
     updateVessels(vessels) {
         if (!this.visibility.vessels) return;
-        this.vesselSource.entities.removeAll();
 
         vessels.forEach(v => {
-            this.vesselSource.entities.add({
-                id: v.id,
-                position: Cesium.Cartesian3.fromDegrees(v.longitude, v.latitude, 0),
-                billboard: {
-                    image: this._createVesselIcon(v.heading),
-                    scale: 0.85,
-                    verticalOrigin: Cesium.VerticalOrigin.CENTER,
-                    heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
-                },
-                properties: v
-            });
+            const pos = Cesium.Cartesian3.fromDegrees(v.longitude, v.latitude, 0);
+            const existing = this.vesselSource.entities.getById(v.id);
+
+            if (existing) {
+                existing.position = pos;
+                existing.properties = v;
+            } else {
+                this.vesselSource.entities.add({
+                    id: v.id,
+                    position: pos,
+                    billboard: {
+                        image: this._getVesselIcon(v.heading),
+                        scale: 0.8,
+                        verticalOrigin: Cesium.VerticalOrigin.CENTER,
+                        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+                    },
+                    properties: v
+                });
+            }
         });
     }
 
     updateWildfires(fires) {
         if (!this.visibility.wildfires) return;
-        this.fireSource.entities.removeAll();
+        if (this.fireSource.entities.values.length > 0) return; // Keep static active fires
 
         fires.forEach(fire => {
-            const size = Math.min(24, Math.max(8, fire.frp_mw / 12));
+            const size = Math.min(18, Math.max(6, fire.frp_mw / 18));
             this.fireSource.entities.add({
                 id: fire.id,
                 position: Cesium.Cartesian3.fromDegrees(fire.longitude, fire.latitude, 0),
@@ -254,7 +286,7 @@ class TacticalLayersManager {
                     pixelSize: size,
                     color: Cesium.Color.fromCssColorString('#ff4500').withAlpha(0.85),
                     outlineColor: Cesium.Color.fromCssColorString('#ffd700'),
-                    outlineWidth: 2,
+                    outlineWidth: 1.5,
                     heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
                 },
                 properties: fire
@@ -264,7 +296,7 @@ class TacticalLayersManager {
 
     updateEarthquakes(quakes) {
         if (!this.visibility.earthquakes) return;
-        this.quakeSource.entities.removeAll();
+        if (this.quakeSource.entities.values.length > 0) return;
 
         quakes.forEach(q => {
             const radiusMeters = (q.radius_km || 25) * 1000;
@@ -274,14 +306,14 @@ class TacticalLayersManager {
                 ellipse: {
                     semiMinorAxis: radiusMeters,
                     semiMajorAxis: radiusMeters,
-                    material: Cesium.Color.fromCssColorString('#f59e0b').withAlpha(0.25),
+                    material: Cesium.Color.fromCssColorString('#f59e0b').withAlpha(0.2),
                     outline: true,
                     outlineColor: Cesium.Color.fromCssColorString('#f59e0b'),
-                    outlineWidth: 2,
+                    outlineWidth: 1.5,
                     heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
                 },
                 point: {
-                    pixelSize: 10,
+                    pixelSize: 8,
                     color: Cesium.Color.fromCssColorString('#f59e0b'),
                     outlineColor: Cesium.Color.WHITE,
                     outlineWidth: 1.5
@@ -293,15 +325,15 @@ class TacticalLayersManager {
 
     updateCameras(cams) {
         if (!this.visibility.cameras) return;
-        this.cameraSource.entities.removeAll();
+        if (this.cameraSource.entities.values.length > 0) return;
 
         cams.forEach(cam => {
             this.cameraSource.entities.add({
                 id: cam.id,
                 position: Cesium.Cartesian3.fromDegrees(cam.longitude, cam.latitude, 0),
                 billboard: {
-                    image: this._createCameraIcon(),
-                    scale: 0.9,
+                    image: this._getCameraIcon(),
+                    scale: 0.85,
                     verticalOrigin: Cesium.VerticalOrigin.CENTER,
                     heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
                 },
@@ -312,15 +344,15 @@ class TacticalLayersManager {
 
     updateConflicts(conflicts) {
         if (!this.visibility.conflicts) return;
-        this.conflictSource.entities.removeAll();
+        if (this.conflictSource.entities.values.length > 0) return;
 
         conflicts.forEach(inc => {
             this.conflictSource.entities.add({
                 id: inc.id,
                 position: Cesium.Cartesian3.fromDegrees(inc.longitude, inc.latitude, 0),
                 billboard: {
-                    image: this._createHazardIcon(),
-                    scale: 0.9,
+                    image: this._getHazardIcon(),
+                    scale: 0.85,
                     verticalOrigin: Cesium.VerticalOrigin.CENTER,
                     heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
                 },
@@ -341,10 +373,10 @@ class TacticalLayersManager {
                 ellipse: {
                     semiMinorAxis: rad,
                     semiMajorAxis: rad,
-                    material: Cesium.Color.fromCssColorString(anom.pulse_color || '#ff0055').withAlpha(0.3),
+                    material: Cesium.Color.fromCssColorString(anom.pulse_color || '#ff0055').withAlpha(0.25),
                     outline: true,
                     outlineColor: Cesium.Color.fromCssColorString(anom.pulse_color || '#ff0055'),
-                    outlineWidth: 3,
+                    outlineWidth: 2,
                     heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
                 },
                 properties: anom
@@ -383,19 +415,14 @@ class TacticalLayersManager {
                 const entType = props.type || 'entity';
                 const entId = props.id || picked.id.id;
 
-                // If camera, trigger surveillance modal directly
                 if (entType === 'live_cam') {
                     if (window.mavenApp) {
                         window.mavenApp.openCameraModal(props);
                     }
                 }
 
-                // Notify bridge / QML
                 if (window.mavenBridge) {
                     window.mavenBridge.notifyEntitySelected(entType, entId, JSON.stringify(props));
-                }
-                if (window.parent && window.parent.onEntitySelected) {
-                    window.parent.onEntitySelected(entType, entId, props);
                 }
             }
         }, Cesium.ScreenSpaceEventType.LEFT_CLICK);

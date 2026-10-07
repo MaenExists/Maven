@@ -12,24 +12,18 @@ class MavenGlobeApp {
         this.changeViewer = null;
         this.weatherLayer = null;
         this.osmBuildings = null;
-        this.sunLightingEnabled = true;
+        this.sunLightingEnabled = false; // Default disabled for high brightness/vividness
         this.buildingsEnabled = true;
+        this.currentBasemap = 'satellite'; // 'satellite' | 'dark' | 'osm'
+        this.activeImageryLayer = null;
 
         this.init();
     }
 
     async init() {
-        // High contrast dark basemap (CartoDB Dark Matter)
-        const darkImageryProvider = new Cesium.UrlTemplateImageryProvider({
-            url: 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-            subdomains: ['a', 'b', 'c', 'd'],
-            maximumLevel: 19,
-            credit: 'CartoDB Dark Matter / OpenStreetMap'
-        });
-
-        // Initialize Cesium Viewer
+        // Initialize Cesium Viewer with high-performance parameters
         this.viewer = new Cesium.Viewer('cesiumContainer', {
-            imageryProvider: darkImageryProvider,
+            baseLayer: false, // Modern Cesium syntax (v1.107+)
             baseLayerPicker: false,
             geocoder: false,
             homeButton: false,
@@ -43,38 +37,40 @@ class MavenGlobeApp {
             vrButton: false,
             shadows: false,
             terrainShadows: Cesium.ShadowMode.DISABLED,
+            orderIndependentTranslucency: false, // Huge FPS boost on WebGL
             contextOptions: {
                 webgl: {
-                    alpha: true,
-                    antialias: true,
-                    preserveDrawingBuffer: true
+                    alpha: false,
+                    antialias: false,
+                    preserveDrawingBuffer: true,
+                    powerPreference: "high-performance"
                 }
             }
         });
 
-        // Atmospheric and lighting configuration
         const scene = this.viewer.scene;
         const globe = scene.globe;
 
-        globe.baseColor = Cesium.Color.fromCssColorString('#06090e');
+        // Visual and rendering tuning
+        globe.baseColor = Cesium.Color.fromCssColorString('#0a1120');
         globe.enableLighting = this.sunLightingEnabled;
-        globe.atmosphereLightIntensity = 8.0;
-        globe.nightColor = Cesium.Color.fromCssColorString('#020408');
-        scene.skyAtmosphere.show = true;
-        scene.skyAtmosphere.brightnessShift = -0.15;
-        scene.skyAtmosphere.saturationShift = -0.3;
+        globe.maximumScreenSpaceError = 2.0; // Smoother tile streaming
+        globe.tileCacheSize = 200;
         scene.backgroundColor = Cesium.Color.fromCssColorString('#030712');
+
+        // Apply primary high-detail Earth imagery
+        await this.setBasemap('satellite');
 
         // Configure camera inertia for catch, drag, and flick momentum
         const controller = scene.screenSpaceCameraController;
         controller.inertiaSpin = 0.88;
         controller.inertiaTranslate = 0.88;
-        controller.inertiaZoom = 0.85;
-        controller.bounceAnimationTime = 0.2;
-        controller.minimumZoomDistance = 50.0;
-        controller.maximumZoomDistance = 45000000.0;
+        controller.inertiaZoom = 0.82;
+        controller.bounceAnimationTime = 0.15;
+        controller.minimumZoomDistance = 30.0;
+        controller.maximumZoomDistance = 40000000.0;
 
-        // Load 3D Buildings (Cesium OSM Buildings) if token/network allows, with graceful fallback
+        // Load 3D Buildings if supported
         try {
             if (typeof Cesium.createOsmBuildingsAsync === 'function') {
                 const buildingsTileset = await Cesium.createOsmBuildingsAsync();
@@ -90,10 +86,10 @@ class MavenGlobeApp {
                 console.log('OSM 3D Buildings streaming active');
             }
         } catch (e) {
-            console.log('OSM 3D Buildings fallback to 2D footprint vectors:', e.message);
+            console.log('OSM 3D Buildings fallback:', e.message);
         }
 
-        // Initialize modules
+        // Initialize operational modules
         this.layers = new TacticalLayersManager(this.viewer);
         this.geofenceDrawer = new GeofenceDrawer(this.viewer);
         this.measureTool = new MeasurementTool(this.viewer);
@@ -103,9 +99,9 @@ class MavenGlobeApp {
         // Bind camera telemetry readout
         this._bindTelemetryReadout();
 
-        // Initial vantage point (orbital view)
+        // Initial orbital vantage point
         this.viewer.camera.setView({
-            destination: Cesium.Cartesian3.fromDegrees(15.0, 25.0, 22000000.0),
+            destination: Cesium.Cartesian3.fromDegrees(30.0, 20.0, 18000000.0),
             orientation: {
                 heading: Cesium.Math.toRadians(0),
                 pitch: Cesium.Math.toRadians(-90),
@@ -113,12 +109,70 @@ class MavenGlobeApp {
             }
         });
 
-        // Start data polling loops
+        // Start background telemetry polling
         this.startDataPolling();
         this.loadInitialGeofences();
 
-        // Setup QWebChannel if present
+        // Setup QWebChannel bridge
         this._initQtWebChannel();
+    }
+
+    async setBasemap(type) {
+        this.currentBasemap = type;
+        const imageryLayers = this.viewer.imageryLayers;
+
+        try {
+            let provider;
+            if (type === 'satellite') {
+                // High-Resolution Photorealistic Satellite Imagery (Esri World Imagery)
+                provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
+                    'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
+                    { enablePickFeatures: false }
+                );
+            } else if (type === 'dark') {
+                // Tactical Dark Matter (CartoDB Dark All)
+                provider = new Cesium.UrlTemplateImageryProvider({
+                    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+                    subdomains: ['a', 'b', 'c', 'd'],
+                    maximumLevel: 19,
+                    credit: 'CartoDB Dark Matter'
+                });
+            } else {
+                // OpenStreetMap Standard
+                provider = new Cesium.OpenStreetMapImageryProvider({
+                    url: 'https://tile.openstreetmap.org/'
+                });
+            }
+
+            // Remove existing base imagery layer
+            if (this.activeImageryLayer) {
+                imageryLayers.remove(this.activeImageryLayer);
+            }
+
+            this.activeImageryLayer = imageryLayers.addImageryProvider(provider, 0);
+            console.log(`Basemap successfully switched to: ${type}`);
+            window.tacticalSound.playClick();
+        } catch (err) {
+            console.warn(`Failed to load ${type} basemap, loading OpenStreetMap fallback:`, err);
+            try {
+                const fallbackProvider = new Cesium.OpenStreetMapImageryProvider({
+                    url: 'https://tile.openstreetmap.org/'
+                });
+                if (this.activeImageryLayer) {
+                    imageryLayers.remove(this.activeImageryLayer);
+                }
+                this.activeImageryLayer = imageryLayers.addImageryProvider(fallbackProvider, 0);
+            } catch (fallbackErr) {
+                console.error('All imagery providers failed:', fallbackErr);
+            }
+        }
+    }
+
+    cycleBasemap() {
+        const sequence = ['satellite', 'dark', 'osm'];
+        const nextIdx = (sequence.indexOf(this.currentBasemap) + 1) % sequence.length;
+        this.setBasemap(sequence[nextIdx]);
+        return sequence[nextIdx];
     }
 
     _bindTelemetryReadout() {
@@ -126,17 +180,24 @@ class MavenGlobeApp {
         const altElem = document.getElementById('hudAlt');
         const headingElem = document.getElementById('hudHeading');
 
+        let ticking = false;
         const updateReadout = () => {
-            const cam = this.viewer.camera;
-            const carto = cam.positionCartographic;
-            const lon = Cesium.Math.toDegrees(carto.longitude).toFixed(4);
-            const lat = Cesium.Math.toDegrees(carto.latitude).toFixed(4);
-            const heightKm = (carto.height / 1000).toFixed(0);
-            const heading = Cesium.Math.toDegrees(cam.heading).toFixed(0);
+            if (!ticking) {
+                requestAnimationFrame(() => {
+                    const cam = this.viewer.camera;
+                    const carto = cam.positionCartographic;
+                    const lon = Cesium.Math.toDegrees(carto.longitude).toFixed(4);
+                    const lat = Cesium.Math.toDegrees(carto.latitude).toFixed(4);
+                    const heightKm = (carto.height / 1000).toFixed(0);
+                    const heading = Cesium.Math.toDegrees(cam.heading).toFixed(0);
 
-            if (coordsElem) coordsElem.textContent = `${lat}° N, ${lon}° E`;
-            if (altElem) altElem.textContent = `${heightKm} KM`;
-            if (headingElem) headingElem.textContent = `${heading}°`;
+                    if (coordsElem) coordsElem.textContent = `${lat}° N, ${lon}° E`;
+                    if (altElem) altElem.textContent = `${heightKm} KM`;
+                    if (headingElem) headingElem.textContent = `${heading}°`;
+                    ticking = false;
+                });
+                ticking = true;
+            }
         };
 
         this.viewer.camera.changed.addEventListener(updateReadout);
@@ -149,7 +210,6 @@ class MavenGlobeApp {
                 window.mavenBridge = channel.objects.mavenBridge;
                 console.log('Qt WebChannel connected to Python bridge');
 
-                // Listen for bridge signals
                 if (window.mavenBridge.cameraFocusRequested) {
                     window.mavenBridge.cameraFocusRequested.connect((lon, lat, height) => {
                         this.flyTo(lon, lat, height);
@@ -197,7 +257,6 @@ class MavenGlobeApp {
                 if (weatherRes.data) this.weatherLayer.updateWeatherGrid(weatherRes.data);
                 if (anomRes.data) this.layers.updateAnomalies(anomRes.data);
 
-                // Update HUD live counters
                 this._updateCounters({
                     flights: flightsRes.count || 0,
                     vessels: vesselsRes.count || 0,
@@ -211,9 +270,8 @@ class MavenGlobeApp {
             }
         };
 
-        // Initial fetch then cycle every 10 seconds
         await fetchAll();
-        setInterval(fetchAll, 10000);
+        setInterval(fetchAll, 12000);
     }
 
     _updateCounters(counts) {
@@ -274,7 +332,6 @@ class MavenGlobeApp {
             if (loc) loc.textContent = camData.city || 'METROPOLITAN SECTOR';
             if (coords) coords.textContent = `${camData.latitude.toFixed(4)}, ${camData.longitude.toFixed(4)}`;
             if (img) {
-                // Route through local CORS proxy if needed
                 const srcUrl = camData.image_url;
                 img.src = srcUrl.startsWith('http') ? `/api/proxy/image?url=${encodeURIComponent(srcUrl)}` : srcUrl;
             }

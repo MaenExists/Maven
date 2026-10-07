@@ -40,6 +40,9 @@
 
     <!-- Top Right Operational Action Tool Dock -->
     <div class="hud-dock-tools">
+        <button id="btnBasemap" class="hud-btn" onclick="const mode = window.mavenApp.cycleBasemap(); document.getElementById('lblBasemap').textContent = mode.toUpperCase();">
+            <span>🌍</span> <span id="lblBasemap">SATELLITE</span>
+        </button>
         <button class="hud-btn" onclick="window.mavenApp.toggleSunLighting()">
             <span>☀️</span> SUN LIGHT
         </button>
