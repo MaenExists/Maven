@@ -1,11 +1,11 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
+import QtQuick
+import QtQuick.Controls
 
 Rectangle {
     id: root
     width: 420
     height: 48
-    color: "rgba(10, 15, 24, 0.95)"
+    color: "#f20a0f18"
     border.color: "#ff0055"
     border.width: 1
     radius: 3

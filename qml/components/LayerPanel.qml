@@ -1,12 +1,12 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
+import QtQuick
+import QtQuick.Controls
 
 Rectangle {
     id: root
     width: 220
     height: 380
     color: "#080c14"
-    border.color: "rgba(0, 240, 255, 0.25)"
+    border.color: "#4000f0ff"
     border.width: 1
     radius: 4
 
@@ -28,7 +28,7 @@ Rectangle {
         Rectangle {
             width: parent.width
             height: 1
-            color: "rgba(0, 240, 255, 0.2)"
+            color: "#3300f0ff"
         }
 
         // Layer rows
@@ -46,7 +46,7 @@ Rectangle {
             delegate: Rectangle {
                 width: parent.width
                 height: 32
-                color: "rgba(255, 255, 255, 0.03)"
+                color: "#08ffffff"
                 border.color: activeState ? modelData.color : "transparent"
                 border.width: 1
                 radius: 3

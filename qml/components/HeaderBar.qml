@@ -1,11 +1,11 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
+import QtQuick
+import QtQuick.Controls
 
 Rectangle {
     id: root
     height: 52
     color: "#080c14"
-    border.color: "rgba(0, 240, 255, 0.3)"
+    border.color: "#4d00f0ff"
     border.width: 1
 
     property string threatLevel: "ELEVATED"
@@ -72,7 +72,7 @@ Rectangle {
         anchors.centerIn: parent
         width: 220
         height: 30
-        color: "rgba(255, 0, 85, 0.12)"
+        color: "#1fff0055"
         border.color: "#ff0055"
         border.width: 1
         radius: 3
@@ -122,7 +122,7 @@ Rectangle {
         Rectangle {
             width: 70
             height: 24
-            color: "rgba(16, 185, 129, 0.15)"
+            color: "#2610b981"
             border.color: "#10b981"
             border.width: 1
             radius: 2

@@ -1,5 +1,5 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
+import QtQuick
+import QtQuick.Controls
 
 Rectangle {
     id: root
@@ -26,21 +26,27 @@ Rectangle {
         spacing: 10
 
         // Header
-        Row {
+        Item {
             width: parent.width
+            height: 20
+
             Text {
                 text: "TARGET TELEMETRY"
                 color: "#00f0ff"
                 font.bold: true
                 font.pixelSize: 11
                 font.letterSpacing: 1.2
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
             }
-            Item { width: 1; height: 1; Layout.fillWidth: true }
+
             Text {
                 text: "×"
                 color: "#94a3b8"
-                font.pixelSize: 16
+                font.pixelSize: 18
                 anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
@@ -55,7 +61,7 @@ Rectangle {
         Rectangle {
             width: parent.width
             height: 1
-            color: "rgba(0, 240, 255, 0.2)"
+            color: "#3300f0ff"
         }
 
         // Target Name & Type
@@ -144,7 +150,7 @@ Rectangle {
                 verticalAlignment: Text.AlignVCenter
             }
             background: Rectangle {
-                color: "rgba(0, 240, 255, 0.15)"
+                color: "#2600f0ff"
                 border.color: "#00f0ff"
                 border.width: 1
                 radius: 2
