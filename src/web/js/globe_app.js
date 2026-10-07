@@ -70,23 +70,25 @@ class MavenGlobeApp {
         controller.minimumZoomDistance = 30.0;
         controller.maximumZoomDistance = 40000000.0;
 
-        // Load 3D Buildings if supported
-        try {
-            if (typeof Cesium.createOsmBuildingsAsync === 'function') {
-                const buildingsTileset = await Cesium.createOsmBuildingsAsync();
-                this.osmBuildings = buildingsTileset;
-                this.osmBuildings.style = new Cesium.Cesium3DTileStyle({
-                    color: {
-                        conditions: [
-                            ['true', 'color("#0f172a", 0.95)']
-                        ]
-                    }
-                });
-                scene.primitives.add(this.osmBuildings);
-                console.log('OSM 3D Buildings streaming active');
+        // Load 3D Buildings if Cesium Ion token is configured
+        if (Cesium.Ion.defaultAccessToken && Cesium.Ion.defaultAccessToken.length > 20) {
+            try {
+                if (typeof Cesium.createOsmBuildingsAsync === 'function') {
+                    const buildingsTileset = await Cesium.createOsmBuildingsAsync();
+                    this.osmBuildings = buildingsTileset;
+                    this.osmBuildings.style = new Cesium.Cesium3DTileStyle({
+                        color: {
+                            conditions: [
+                                ['true', 'color("#0f172a", 0.95)']
+                            ]
+                        }
+                    });
+                    scene.primitives.add(this.osmBuildings);
+                    console.log('OSM 3D Buildings streaming active');
+                }
+            } catch (e) {
+                console.log('OSM 3D Buildings fallback:', e.message);
             }
-        } catch (e) {
-            console.log('OSM 3D Buildings fallback:', e.message);
         }
 
         // Initialize operational modules
