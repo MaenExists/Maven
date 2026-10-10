@@ -13,6 +13,8 @@ Rectangle {
 
     property string currentBasemap: "SATELLITE"
     property bool collapsed: false
+    property bool streetViewActive: false
+    property bool bordersActive: true
 
     Behavior on height {
         NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
@@ -21,6 +23,12 @@ Rectangle {
     signal basemapClicked()
     signal sunClicked()
     signal buildingsClicked()
+    signal streetViewClicked()
+    signal bordersClicked()
+    signal tiltClicked()
+    signal northClicked()
+    signal zoomInClicked()
+    signal zoomOutClicked()
     signal drawZoneClicked()
     signal rulerClicked()
     signal areaClicked()
@@ -57,242 +65,403 @@ Rectangle {
     RowLayout {
         anchors.fill: parent
         anchors.margins: 4
-        spacing: 6
+        spacing: 4
         visible: !root.collapsed
 
-        // Basemap Switcher
-        Button {
-            id: btnBasemap
+        Flickable {
+            Layout.fillWidth: true
             Layout.fillHeight: true
-            contentItem: Row {
+            contentWidth: buttonRow.implicitWidth
+            contentHeight: height
+            flickableDirection: Flickable.HorizontalFlick
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+
+            RowLayout {
+                id: buttonRow
+                height: parent.height
                 spacing: 5
-                anchors.centerIn: parent
-                Text { text: "🌍"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
-                Text {
-                    text: root.currentBasemap
-                    color: "#00f0ff"
-                    font.bold: true
-                    font.pixelSize: 10
-                    font.family: "Monospace"
-                    anchors.verticalCenter: parent.verticalCenter
+
+                // Basemap Switcher
+                Button {
+                    id: btnBasemap
+                    Layout.fillHeight: true
+                    contentItem: Row {
+                        spacing: 5
+                        anchors.centerIn: parent
+                        Text { text: "🌍"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            text: root.currentBasemap
+                            color: "#00f0ff"
+                            font.bold: true
+                            font.pixelSize: 10
+                            font.family: "Monospace"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    background: Rectangle {
+                        color: btnBasemap.hovered ? "#4000f0ff" : "#1a00f0ff"
+                        border.color: "#00f0ff"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.basemapClicked()
+                }
+
+                // Sun Lighting
+                Button {
+                    id: btnSun
+                    Layout.fillHeight: true
+                    contentItem: Row {
+                        spacing: 5
+                        anchors.centerIn: parent
+                        Text { text: "☀️"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            text: "SUN"
+                            color: "#e2e8f0"
+                            font.bold: true
+                            font.pixelSize: 10
+                            font.family: "Monospace"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    background: Rectangle {
+                        color: btnSun.hovered ? "#33ffffff" : "#0dffffff"
+                        border.color: "#4000f0ff"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.sunClicked()
+                }
+
+                // 3D Buildings
+                Button {
+                    id: btn3D
+                    Layout.fillHeight: true
+                    contentItem: Row {
+                        spacing: 5
+                        anchors.centerIn: parent
+                        Text { text: "🏙️"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            text: "3D TILES"
+                            color: "#e2e8f0"
+                            font.bold: true
+                            font.pixelSize: 10
+                            font.family: "Monospace"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    background: Rectangle {
+                        color: btn3D.hovered ? "#33ffffff" : "#0dffffff"
+                        border.color: "#4000f0ff"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.buildingsClicked()
+                }
+
+                // Street View Mode
+                Button {
+                    id: btnStreetView
+                    Layout.fillHeight: true
+                    contentItem: Row {
+                        spacing: 5
+                        anchors.centerIn: parent
+                        Text { text: "🚶"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            text: root.streetViewActive ? "STREET [ON]" : "STREET VIEW"
+                            color: root.streetViewActive ? "#10b981" : "#e2e8f0"
+                            font.bold: true
+                            font.pixelSize: 10
+                            font.family: "Monospace"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    background: Rectangle {
+                        color: root.streetViewActive ? "#3310b981" : (btnStreetView.hovered ? "#33ffffff" : "#0dffffff")
+                        border.color: root.streetViewActive ? "#10b981" : "#4000f0ff"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.streetViewClicked()
+                }
+
+                // Country Borders Toggle
+                Button {
+                    id: btnBorders
+                    Layout.fillHeight: true
+                    contentItem: Row {
+                        spacing: 5
+                        anchors.centerIn: parent
+                        Text { text: "🌐"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            text: root.bordersActive ? "BORDERS [ON]" : "BORDERS [OFF]"
+                            color: root.bordersActive ? "#00f0ff" : "#64748b"
+                            font.bold: true
+                            font.pixelSize: 10
+                            font.family: "Monospace"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    background: Rectangle {
+                        color: root.bordersActive ? "#2600f0ff" : (btnBorders.hovered ? "#33ffffff" : "#0dffffff")
+                        border.color: root.bordersActive ? "#00f0ff" : "#334155"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.bordersClicked()
+                }
+
+                // 3D Perspective Tilt
+                Button {
+                    id: btnTilt
+                    Layout.fillHeight: true
+                    contentItem: Row {
+                        spacing: 5
+                        anchors.centerIn: parent
+                        Text { text: "📐"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            text: "3D TILT"
+                            color: "#e2e8f0"
+                            font.bold: true
+                            font.pixelSize: 10
+                            font.family: "Monospace"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    background: Rectangle {
+                        color: btnTilt.hovered ? "#33ffffff" : "#0dffffff"
+                        border.color: "#4000f0ff"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.tiltClicked()
+                }
+
+                // North Reset
+                Button {
+                    id: btnNorth
+                    Layout.fillHeight: true
+                    contentItem: Row {
+                        spacing: 5
+                        anchors.centerIn: parent
+                        Text { text: "🧭"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            text: "NORTH"
+                            color: "#00f0ff"
+                            font.bold: true
+                            font.pixelSize: 10
+                            font.family: "Monospace"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    background: Rectangle {
+                        color: btnNorth.hovered ? "#33ffffff" : "#0dffffff"
+                        border.color: "#4000f0ff"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.northClicked()
+                }
+
+                // Zoom In
+                Button {
+                    id: btnZoomIn
+                    Layout.fillHeight: true
+                    contentItem: Text {
+                        anchors.centerIn: parent
+                        text: "＋"
+                        color: "#00f0ff"
+                        font.bold: true
+                        font.pixelSize: 11
+                    }
+                    background: Rectangle {
+                        color: btnZoomIn.hovered ? "#33ffffff" : "#0dffffff"
+                        border.color: "#4000f0ff"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.zoomInClicked()
+                }
+
+                // Zoom Out
+                Button {
+                    id: btnZoomOut
+                    Layout.fillHeight: true
+                    contentItem: Text {
+                        anchors.centerIn: parent
+                        text: "－"
+                        color: "#00f0ff"
+                        font.bold: true
+                        font.pixelSize: 11
+                    }
+                    background: Rectangle {
+                        color: btnZoomOut.hovered ? "#33ffffff" : "#0dffffff"
+                        border.color: "#4000f0ff"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.zoomOutClicked()
+                }
+
+                // Draw Zone (Geofence)
+                Button {
+                    id: btnZone
+                    Layout.fillHeight: true
+                    contentItem: Row {
+                        spacing: 5
+                        anchors.centerIn: parent
+                        Text { text: "🛡️"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            text: "DRAW ZONE"
+                            color: "#ff0055"
+                            font.bold: true
+                            font.pixelSize: 10
+                            font.family: "Monospace"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    background: Rectangle {
+                        color: btnZone.hovered ? "#40ff0055" : "#1aff0055"
+                        border.color: "#ff0055"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.drawZoneClicked()
+                }
+
+                // Distance Ruler
+                Button {
+                    id: btnRuler
+                    Layout.fillHeight: true
+                    contentItem: Row {
+                        spacing: 5
+                        anchors.centerIn: parent
+                        Text { text: "📏"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            text: "RULER"
+                            color: "#00f0ff"
+                            font.bold: true
+                            font.pixelSize: 10
+                            font.family: "Monospace"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    background: Rectangle {
+                        color: btnRuler.hovered ? "#33ffffff" : "#0dffffff"
+                        border.color: "#4000f0ff"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.rulerClicked()
+                }
+
+                // Area Polygon
+                Button {
+                    id: btnArea
+                    Layout.fillHeight: true
+                    contentItem: Row {
+                        spacing: 5
+                        anchors.centerIn: parent
+                        Text { text: "📐"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            text: "AREA"
+                            color: "#00f0ff"
+                            font.bold: true
+                            font.pixelSize: 10
+                            font.family: "Monospace"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    background: Rectangle {
+                        color: btnArea.hovered ? "#33ffffff" : "#0dffffff"
+                        border.color: "#4000f0ff"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.areaClicked()
+                }
+
+                // Satellite Diff
+                Button {
+                    id: btnSatDiff
+                    Layout.fillHeight: true
+                    contentItem: Row {
+                        spacing: 5
+                        anchors.centerIn: parent
+                        Text { text: "🛰️"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            text: "SAT DIFF"
+                            color: "#f59e0b"
+                            font.bold: true
+                            font.pixelSize: 10
+                            font.family: "Monospace"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    background: Rectangle {
+                        color: btnSatDiff.hovered ? "#40f59e0b" : "#1af59e0b"
+                        border.color: "#f59e0b"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.satDiffClicked()
+                }
+
+                // Chokepoint Intercept
+                Button {
+                    id: btnChoke
+                    Layout.fillHeight: true
+                    contentItem: Row {
+                        spacing: 5
+                        anchors.centerIn: parent
+                        Text { text: "🎯"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            text: "CHOKEPOINT"
+                            color: "#ff0055"
+                            font.bold: true
+                            font.pixelSize: 10
+                            font.family: "Monospace"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    background: Rectangle {
+                        color: btnChoke.hovered ? "#40ff0055" : "#1aff0055"
+                        border.color: "#ff0055"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.chokepointClicked()
+                }
+
+                // Clear Tool
+                Button {
+                    id: btnClear
+                    Layout.fillHeight: true
+                    contentItem: Text {
+                        anchors.centerIn: parent
+                        text: "RESET"
+                        color: "#94a3b8"
+                        font.bold: true
+                        font.pixelSize: 10
+                        font.family: "Monospace"
+                    }
+                    background: Rectangle {
+                        color: btnClear.hovered ? "#33ffffff" : "#0dffffff"
+                        border.color: "#334155"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.clearClicked()
                 }
             }
-            background: Rectangle {
-                color: btnBasemap.hovered ? "#4000f0ff" : "#1a00f0ff"
-                border.color: "#00f0ff"
-                border.width: 1
-                radius: 2
-            }
-            onClicked: root.basemapClicked()
         }
 
-        // Sun Lighting
-        Button {
-            id: btnSun
-            Layout.fillHeight: true
-            contentItem: Row {
-                spacing: 5
-                anchors.centerIn: parent
-                Text { text: "☀️"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
-                Text {
-                    text: "SUN"
-                    color: "#e2e8f0"
-                    font.bold: true
-                    font.pixelSize: 10
-                    font.family: "Monospace"
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-            }
-            background: Rectangle {
-                color: btnSun.hovered ? "#33ffffff" : "#0dffffff"
-                border.color: "#4000f0ff"
-                border.width: 1
-                radius: 2
-            }
-            onClicked: root.sunClicked()
-        }
-
-        // 3D Buildings
-        Button {
-            id: btn3D
-            Layout.fillHeight: true
-            contentItem: Row {
-                spacing: 5
-                anchors.centerIn: parent
-                Text { text: "🏙️"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
-                Text {
-                    text: "3D TILES"
-                    color: "#e2e8f0"
-                    font.bold: true
-                    font.pixelSize: 10
-                    font.family: "Monospace"
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-            }
-            background: Rectangle {
-                color: btn3D.hovered ? "#33ffffff" : "#0dffffff"
-                border.color: "#4000f0ff"
-                border.width: 1
-                radius: 2
-            }
-            onClicked: root.buildingsClicked()
-        }
-
-        // Draw Zone (Geofence)
-        Button {
-            id: btnZone
-            Layout.fillHeight: true
-            contentItem: Row {
-                spacing: 5
-                anchors.centerIn: parent
-                Text { text: "🛡️"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
-                Text {
-                    text: "DRAW ZONE"
-                    color: "#ff0055"
-                    font.bold: true
-                    font.pixelSize: 10
-                    font.family: "Monospace"
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-            }
-            background: Rectangle {
-                color: btnZone.hovered ? "#40ff0055" : "#1aff0055"
-                border.color: "#ff0055"
-                border.width: 1
-                radius: 2
-            }
-            onClicked: root.drawZoneClicked()
-        }
-
-        // Distance Ruler
-        Button {
-            id: btnRuler
-            Layout.fillHeight: true
-            contentItem: Row {
-                spacing: 5
-                anchors.centerIn: parent
-                Text { text: "📏"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
-                Text {
-                    text: "RULER"
-                    color: "#00f0ff"
-                    font.bold: true
-                    font.pixelSize: 10
-                    font.family: "Monospace"
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-            }
-            background: Rectangle {
-                color: btnRuler.hovered ? "#33ffffff" : "#0dffffff"
-                border.color: "#4000f0ff"
-                border.width: 1
-                radius: 2
-            }
-            onClicked: root.rulerClicked()
-        }
-
-        // Area Polygon
-        Button {
-            id: btnArea
-            Layout.fillHeight: true
-            contentItem: Row {
-                spacing: 5
-                anchors.centerIn: parent
-                Text { text: "📐"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
-                Text {
-                    text: "AREA"
-                    color: "#00f0ff"
-                    font.bold: true
-                    font.pixelSize: 10
-                    font.family: "Monospace"
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-            }
-            background: Rectangle {
-                color: btnArea.hovered ? "#33ffffff" : "#0dffffff"
-                border.color: "#4000f0ff"
-                border.width: 1
-                radius: 2
-            }
-            onClicked: root.areaClicked()
-        }
-
-        // Satellite Diff
-        Button {
-            id: btnSatDiff
-            Layout.fillHeight: true
-            contentItem: Row {
-                spacing: 5
-                anchors.centerIn: parent
-                Text { text: "🛰️"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
-                Text {
-                    text: "SAT DIFF"
-                    color: "#f59e0b"
-                    font.bold: true
-                    font.pixelSize: 10
-                    font.family: "Monospace"
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-            }
-            background: Rectangle {
-                color: btnSatDiff.hovered ? "#40f59e0b" : "#1af59e0b"
-                border.color: "#f59e0b"
-                border.width: 1
-                radius: 2
-            }
-            onClicked: root.satDiffClicked()
-        }
-
-        // Chokepoint Intercept
-        Button {
-            id: btnChoke
-            Layout.fillHeight: true
-            contentItem: Row {
-                spacing: 5
-                anchors.centerIn: parent
-                Text { text: "🎯"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
-                Text {
-                    text: "CHOKEPOINT"
-                    color: "#ff0055"
-                    font.bold: true
-                    font.pixelSize: 10
-                    font.family: "Monospace"
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-            }
-            background: Rectangle {
-                color: btnChoke.hovered ? "#40ff0055" : "#1aff0055"
-                border.color: "#ff0055"
-                border.width: 1
-                radius: 2
-            }
-            onClicked: root.chokepointClicked()
-        }
-
-        // Clear Tool
-        Button {
-            id: btnClear
-            Layout.fillHeight: true
-            contentItem: Text {
-                anchors.centerIn: parent
-                text: "RESET"
-                color: "#94a3b8"
-                font.bold: true
-                font.pixelSize: 10
-                font.family: "Monospace"
-            }
-            background: Rectangle {
-                color: btnClear.hovered ? "#33ffffff" : "#0dffffff"
-                border.color: "#334155"
-                border.width: 1
-                radius: 2
-            }
-            onClicked: root.clearClicked()
-        }
-
-        // Collapse Button
+        // Collapse Button pinned right
         Button {
             id: btnDockCollapse
             Layout.fillHeight: true
+            Layout.preferredWidth: 20
             contentItem: Text {
                 anchors.centerIn: parent
                 text: "▲"

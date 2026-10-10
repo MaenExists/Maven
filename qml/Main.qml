@@ -44,6 +44,41 @@ Window {
         onActivated: toggleAllCards()
     }
 
+    Shortcut {
+        sequence: "N"
+        onActivated: commandBar.northClicked()
+    }
+
+    Shortcut {
+        sequence: "T"
+        onActivated: commandBar.tiltClicked()
+    }
+
+    Shortcut {
+        sequence: "B"
+        onActivated: commandBar.bordersClicked()
+    }
+
+    Shortcut {
+        sequence: "S"
+        onActivated: commandBar.streetViewClicked()
+    }
+
+    Shortcut {
+        sequence: "+"
+        onActivated: commandBar.zoomInClicked()
+    }
+
+    Shortcut {
+        sequence: "="
+        onActivated: commandBar.zoomInClicked()
+    }
+
+    Shortcut {
+        sequence: "-"
+        onActivated: commandBar.zoomOutClicked()
+    }
+
     // Top Header Banner
     HeaderBar {
         id: headerBar
@@ -77,7 +112,7 @@ Window {
         anchors.top: searchBar.bottom
         anchors.topMargin: 6
         anchors.horizontalCenter: parent.horizontalCenter
-        width: Math.min(parent.width - 32, 780)
+        width: Math.min(parent.width - 32, 1100)
 
         onBasemapClicked: {
             globeWebEngine.runJavaScript("if (window.mavenApp) { var m = window.mavenApp.cycleBasemap(); m; }", function(result) {
@@ -91,6 +126,34 @@ Window {
 
         onBuildingsClicked: {
             globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.toggle3DBuildings(); }");
+        }
+
+        onStreetViewClicked: {
+            globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.toggleStreetViewMode(); }", function(res) {
+                commandBar.streetViewActive = Boolean(res);
+            });
+        }
+
+        onBordersClicked: {
+            globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.toggleBorders(); }", function(res) {
+                commandBar.bordersActive = Boolean(res);
+            });
+        }
+
+        onTiltClicked: {
+            globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.toggleTilt(); }");
+        }
+
+        onNorthClicked: {
+            globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.resetNorth(); }");
+        }
+
+        onZoomInClicked: {
+            globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.zoomIn(); }");
+        }
+
+        onZoomOutClicked: {
+            globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.zoomOut(); }");
         }
 
         onDrawZoneClicked: {
@@ -239,6 +302,12 @@ Window {
                 var data = JSON.parse(jsonStr);
                 if (entityType === "live_cam") {
                     cameraModal.open(data);
+                } else if (entityType === "country") {
+                    var popStr = (data.population && data.population > 0) ? " // Pop: " + Number(data.population).toLocaleString() : "";
+                    var subtitle = (data.continent || "Sovereign Territory") + popStr;
+                    placeDossierCard.loadDossier(data.name, data.latitude || 0.0, data.longitude || 0.0, subtitle);
+                } else if (entityType === "ground_point") {
+                    placeDossierCard.loadDossier(data.name, data.latitude, data.longitude, "Planetary Surface Point");
                 } else {
                     telemetryCard.showEntity(data);
                 }

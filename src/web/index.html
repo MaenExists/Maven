@@ -18,12 +18,60 @@
         .cesium-widget-credits {
             display: none !important;
         }
+
+        /* Tactical HUD Hover Tooltip */
+        #tacticalTooltip {
+            position: absolute;
+            display: none;
+            pointer-events: none;
+            z-index: 1000;
+            background: rgba(6, 11, 20, 0.94);
+            border: 1px solid #00f0ff;
+            border-radius: 4px;
+            padding: 8px 12px;
+            color: #ffffff;
+            font-family: "JetBrains Mono", "Courier New", monospace;
+            font-size: 11px;
+            box-shadow: 0 4px 20px rgba(0, 240, 255, 0.25), 0 0 10px rgba(0, 0, 0, 0.8);
+            max-width: 320px;
+            line-height: 1.4;
+            backdrop-filter: blur(8px);
+            transition: opacity 0.15s ease-out;
+        }
+        #tacticalTooltip .tooltip-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
+            font-weight: bold;
+            font-size: 10px;
+            letter-spacing: 1px;
+            color: #00f0ff;
+        }
+        #tacticalTooltip .tooltip-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: #ffffff;
+            margin-bottom: 3px;
+        }
+        #tacticalTooltip .tooltip-meta {
+            font-size: 10px;
+            color: #94a3b8;
+        }
+        #tacticalTooltip .tooltip-hint {
+            margin-top: 6px;
+            font-size: 9px;
+            font-weight: bold;
+            color: #10b981;
+            letter-spacing: 0.8px;
+        }
     </style>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.146.0/Build/Cesium/Widgets/widgets.css">
     <script src="https://cdn.jsdelivr.net/npm/cesium@1.146.0/Build/Cesium/Cesium.js"></script>
 </head>
 <body>
     <div id="cesiumContainer"></div>
+    <div id="tacticalTooltip"></div>
 
     <script src="js/sound.js"></script>
     <script src="js/layers.js"></script>
@@ -31,6 +79,7 @@
     <script src="js/measurements.js"></script>
     <script src="js/change_detect.js"></script>
     <script src="js/weather_layer.js"></script>
+    <script src="js/countries.js"></script>
     <script src="js/globe_app.js"></script>
 </body>
 </html>

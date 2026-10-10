@@ -21,26 +21,22 @@ class WeatherSimulationLayer {
             const wind = w.wind_speed_kmh;
             const dir = w.wind_direction_deg;
 
-            // Weather telemetry label & storm marker
+            // Weather atmospheric sensor marker (no permanent clutter label; data visible on hover)
             this.weatherSource.entities.add({
                 id: w.id,
                 position: Cesium.Cartesian3.fromDegrees(w.longitude, w.latitude, 5000),
                 point: {
-                    pixelSize: 6,
-                    color: Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.7),
-                    outlineColor: Cesium.Color.WHITE,
+                    pixelSize: 5,
+                    color: Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.6),
+                    outlineColor: Cesium.Color.fromCssColorString('#0284c7'),
                     outlineWidth: 1
                 },
-                label: {
-                    text: `${w.name || ''}\n${temp}°C | ${wind} km/h ➔ ${dir}°`,
-                    font: '10px "JetBrains Mono", monospace',
-                    fillColor: Cesium.Color.fromCssColorString('#bae6fd'),
-                    showBackground: true,
-                    backgroundColor: Cesium.Color.fromCssColorString('#06090e').withAlpha(0.85),
-                    backgroundPadding: new Cesium.Cartesian2(4, 3),
-                    pixelOffset: new Cesium.Cartesian2(0, -18)
-                },
-                properties: w
+                properties: {
+                    ...w,
+                    type: 'weather',
+                    title: `Atmospheric Hub: ${w.name}`,
+                    details: `${temp}°C | Wind: ${wind} km/h (${dir}°)`
+                }
             });
         });
     }

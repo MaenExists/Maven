@@ -97,6 +97,8 @@ class MavenGlobeApp {
         this.measureTool = new MeasurementTool(this.viewer);
         this.changeViewer = new SatelliteChangeViewer(this.viewer);
         this.weatherLayer = new WeatherSimulationLayer(this.viewer);
+        this.countries = new CountriesLayerManager(this.viewer);
+        this.streetViewMode = false;
 
         // Bind camera telemetry readout
         this._bindTelemetryReadout();
@@ -308,6 +310,63 @@ class MavenGlobeApp {
             },
             duration: 2.2
         });
+    }
+
+    resetNorth() {
+        if (window.tacticalSound) window.tacticalSound.playClick();
+        const carto = this.viewer.camera.positionCartographic;
+        this.viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, carto.height),
+            orientation: {
+                heading: Cesium.Math.toRadians(0),
+                pitch: Cesium.Math.toRadians(-90),
+                roll: 0.0
+            },
+            duration: 1.2
+        });
+    }
+
+    toggleTilt() {
+        if (window.tacticalSound) window.tacticalSound.playClick();
+        const carto = this.viewer.camera.positionCartographic;
+        const currentPitch = Cesium.Math.toDegrees(this.viewer.camera.pitch);
+        const targetPitch = currentPitch < -60 ? -30 : -90;
+        this.viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, Math.min(carto.height, 800000)),
+            orientation: {
+                heading: this.viewer.camera.heading,
+                pitch: Cesium.Math.toRadians(targetPitch),
+                roll: 0.0
+            },
+            duration: 1.5
+        });
+        return targetPitch === -30;
+    }
+
+    zoomIn() {
+        if (window.tacticalSound) window.tacticalSound.playClick();
+        const height = this.viewer.camera.positionCartographic.height;
+        this.viewer.camera.zoomIn(Math.max(500, height * 0.45));
+    }
+
+    zoomOut() {
+        if (window.tacticalSound) window.tacticalSound.playClick();
+        const height = this.viewer.camera.positionCartographic.height;
+        this.viewer.camera.zoomOut(Math.min(20000000, height * 0.7));
+    }
+
+    toggleStreetViewMode() {
+        this.streetViewMode = !this.streetViewMode;
+        if (window.tacticalSound) window.tacticalSound.playClick();
+        return this.streetViewMode;
+    }
+
+    toggleBorders(show) {
+        if (window.tacticalSound) window.tacticalSound.playClick();
+        if (this.countries) {
+            return this.countries.toggleBorders(show);
+        }
+        return false;
     }
 
     toggleSunLighting() {

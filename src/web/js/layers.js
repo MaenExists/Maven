@@ -402,27 +402,193 @@ class TacticalLayersManager {
 
     _initSelectionHandler() {
         const handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
-        handler.setInputAction((click) => {
-            const picked = this.viewer.scene.pick(click.position);
-            if (Cesium.defined(picked) && picked.id && picked.id.properties) {
-                window.tacticalSound.playTargetLock();
-                const props = {};
-                const propNames = picked.id.properties.propertyNames;
-                propNames.forEach(name => {
-                    props[name] = picked.id.properties[name].getValue();
-                });
+        const tooltip = document.getElementById('tacticalTooltip');
+
+        // Interactive Hover Tooltips on all signs, markers, and country territories
+        handler.setInputAction((movement) => {
+            const picked = this.viewer.scene.pick(movement.endPosition);
+            if (Cesium.defined(picked) && picked.id) {
+                this.viewer.scene.canvas.style.cursor = 'pointer';
+                const entity = picked.id;
+
+                // Check if hovering over country boundary polygon
+                if (entity.customCountryData) {
+                    if (window.mavenApp && window.mavenApp.countries) {
+                        window.mavenApp.countries.highlightCountryOnHover(entity);
+                    }
+                    if (tooltip) {
+                        const c = entity.customCountryData;
+                        const popStr = c.population ? (c.population > 1e6 ? `${(c.population / 1e6).toFixed(1)}M` : `${c.population.toLocaleString()}`) : 'N/A';
+                        tooltip.innerHTML = `
+                            <div class="tooltip-header">🌍 SOVEREIGN TERRITORY</div>
+                            <div class="tooltip-title">${c.name}</div>
+                            <div class="tooltip-meta">CONTINENT: ${c.continent} | POP: ${popStr}</div>
+                            <div class="tooltip-hint">▶ CLICK TO INSPECT COUNTRY DOSSIER</div>
+                        `;
+                        tooltip.style.left = `${Math.min(window.innerWidth - 330, movement.endPosition.x + 16)}px`;
+                        tooltip.style.top = `${Math.min(window.innerHeight - 100, movement.endPosition.y + 16)}px`;
+                        tooltip.style.display = 'block';
+                        tooltip.style.opacity = '1';
+                    }
+                    return;
+                }
+
+                // Hovering over tactical entities (flight, vessel, camera, earthquake, fire, conflict, weather)
+                let props = {};
+                if (entity.properties) {
+                    if (typeof entity.properties.getValue === 'function') {
+                        props = entity.properties.getValue(Cesium.JulianDate.now()) || {};
+                    } else if (entity.properties.propertyNames) {
+                        entity.properties.propertyNames.forEach(name => {
+                            props[name] = entity.properties[name].getValue();
+                        });
+                    }
+                }
 
                 const entType = props.type || 'entity';
-                const entId = props.id || picked.id.id;
+                if (tooltip && (props.name || props.callsign || props.title || props.id)) {
+                    let header = 'TACTICAL TARGET';
+                    let title = props.callsign || props.name || props.title || props.id;
+                    let meta = '';
+                    let hint = '▶ CLICK TO INSPECT';
 
+                    if (entType === 'flight') {
+                        header = '✈️ AIRCRAFT [AIR RECON]';
+                        title = `${props.callsign || 'FLIGHT'} (${props.origin_country || 'INTERNATIONAL'})`;
+                        meta = `ALT: ${Math.round(props.altitude || 0)}m | SPD: ${Math.round(props.velocity_knots || 0)} kts | HDG: ${Math.round(props.heading || 0)}°`;
+                        hint = props.squawk === '7700' ? '⚠️ EMERGENCY SQUAWK 7700' : '▶ CLICK FOR TARGET TELEMETRY';
+                    } else if (entType === 'vessel') {
+                        header = '🚢 MARITIME AIS VESSEL';
+                        title = `${props.name || 'VESSEL'} [${(props.vessel_type || 'CARGO').toUpperCase()}]`;
+                        meta = `SPEED: ${props.speed_knots || 0} kts | DEST: ${props.destination || 'TRANSIT'}`;
+                        hint = '▶ CLICK FOR MARITIME TELEMETRY';
+                    } else if (entType === 'live_cam') {
+                        header = '📹 LIVE SURVEILLANCE CCTV';
+                        title = props.name || 'CCTV UNIT';
+                        meta = `${props.city || 'METROPOLITAN SECTOR'} // ${props.direction || 'Corridor'}`;
+                        hint = '▶ CLICK TO ENTER LIVE STREET VIEW';
+                    } else if (entType === 'earthquake') {
+                        header = '⚠️ SEISMIC HAZARD [USGS]';
+                        title = `M${props.magnitude} - ${props.place || 'Seismic Event'}`;
+                        meta = `DEPTH: ${props.depth_km || 10} KM | TIME: ACTIVE`;
+                    } else if (entType === 'wildfire') {
+                        header = '🔥 THERMAL FRONT [FIRMS]';
+                        title = `ACTIVE WILDFIRE CLUSTER`;
+                        meta = `RADIATIVE POWER: ${props.frp_mw || 25} MW`;
+                    } else if (entType === 'conflict') {
+                        header = '⚔️ SECURITY / HAZARD ZONE';
+                        title = props.title || 'SECURITY INCIDENT';
+                        meta = `SEVERITY: ${props.severity || 'ELEVATED'}`;
+                    } else if (entType === 'weather') {
+                        header = '🌦️ ATMOSPHERIC TELEMETRY';
+                        title = props.title || props.name;
+                        meta = props.details || `${props.temperature_c}°C`;
+                    }
+
+                    tooltip.innerHTML = `
+                        <div class="tooltip-header">${header}</div>
+                        <div class="tooltip-title">${title}</div>
+                        <div class="tooltip-meta">${meta}</div>
+                        <div class="tooltip-hint">${hint}</div>
+                    `;
+                    tooltip.style.left = `${Math.min(window.innerWidth - 330, movement.endPosition.x + 16)}px`;
+                    tooltip.style.top = `${Math.min(window.innerHeight - 100, movement.endPosition.y + 16)}px`;
+                    tooltip.style.display = 'block';
+                    tooltip.style.opacity = '1';
+                }
+            } else {
+                this.viewer.scene.canvas.style.cursor = 'default';
+                if (window.mavenApp && window.mavenApp.countries) {
+                    window.mavenApp.countries.clearHover();
+                }
+                if (tooltip) {
+                    tooltip.style.opacity = '0';
+                    tooltip.style.display = 'none';
+                }
+            }
+        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+        // Click handler with direct Street View and Country Dossier triggers
+        handler.setInputAction((click) => {
+            const picked = this.viewer.scene.pick(click.position);
+            if (Cesium.defined(picked) && picked.id) {
+                window.tacticalSound.playTargetLock();
+                const entity = picked.id;
+
+                // 1. Country Selection
+                if (entity.customCountryData) {
+                    if (window.mavenApp && window.mavenApp.countries) {
+                        const countryData = window.mavenApp.countries.selectCountry(entity);
+                        if (window.mavenBridge) {
+                            window.mavenBridge.notifyEntitySelected('country', countryData.name, JSON.stringify(countryData));
+                        }
+                    }
+                    return;
+                }
+
+                // 2. Tactical Entities (Camera, Flight, Vessel, Hazard)
+                let props = {};
+                if (entity.properties) {
+                    if (typeof entity.properties.getValue === 'function') {
+                        props = entity.properties.getValue(Cesium.JulianDate.now()) || {};
+                    } else if (entity.properties.propertyNames) {
+                        entity.properties.propertyNames.forEach(name => {
+                            props[name] = entity.properties[name].getValue();
+                        });
+                    }
+                }
+
+                const entType = props.type || 'entity';
+                const entId = props.id || entity.id;
+
+                // If live camera clicked: swoop camera directly down to ground level and open feed
                 if (entType === 'live_cam') {
-                    if (window.mavenApp) {
-                        window.mavenApp.openCameraModal(props);
+                    if (props.longitude && props.latitude) {
+                        this.viewer.camera.flyTo({
+                            destination: Cesium.Cartesian3.fromDegrees(props.longitude, props.latitude, 450),
+                            orientation: {
+                                heading: Cesium.Math.toRadians(0),
+                                pitch: Cesium.Math.toRadians(-22),
+                                roll: 0.0
+                            },
+                            duration: 2.0
+                        });
                     }
                 }
 
                 if (window.mavenBridge) {
                     window.mavenBridge.notifyEntitySelected(entType, entId, JSON.stringify(props));
+                }
+            } else {
+                // Clicked on planetary terrain: reverse-geodetic lookup and Street View swoop
+                const ray = this.viewer.camera.getPickRay(click.position);
+                const cartesian = this.viewer.scene.globe.pick(ray, this.viewer.scene);
+                if (Cesium.defined(cartesian)) {
+                    const carto = Cesium.Cartographic.fromCartesian(cartesian);
+                    const lon = Cesium.Math.toDegrees(carto.longitude);
+                    const lat = Cesium.Math.toDegrees(carto.latitude);
+
+                    // If Street View mode is active, smoothly swoop to ground level and query sector dossier
+                    if (window.mavenApp && window.mavenApp.streetViewMode) {
+                        this.viewer.camera.flyTo({
+                            destination: Cesium.Cartesian3.fromDegrees(lon, lat, 400),
+                            orientation: {
+                                heading: this.viewer.camera.heading,
+                                pitch: Cesium.Math.toRadians(-20),
+                                roll: 0.0
+                            },
+                            duration: 2.0
+                        });
+
+                        if (window.mavenBridge) {
+                            window.mavenBridge.notifyEntitySelected('ground_point', `geo_${lat.toFixed(3)}_${lon.toFixed(3)}`, JSON.stringify({
+                                type: 'ground_point',
+                                latitude: lat,
+                                longitude: lon,
+                                name: `Sector Coordinates: ${lat.toFixed(3)}°, ${lon.toFixed(3)}°`
+                            }));
+                        }
+                    }
                 }
             }
         }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
