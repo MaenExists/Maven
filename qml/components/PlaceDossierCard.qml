@@ -5,7 +5,7 @@ import QtQuick.Layouts
 Rectangle {
     id: root
     width: 390
-    height: Math.min(620, parent.height - 180)
+    height: collapsed ? 40 : Math.min(620, parent.height - 180)
     color: "#f2080c16"
     border.color: "#00f0ff"
     border.width: 1
@@ -23,11 +23,16 @@ Rectangle {
     property var placeCameras: []
     property var placeContext: ({})
     property bool isLoading: false
+    property bool collapsed: false
 
     signal cameraSelected(var camData)
     signal groundPerspectiveRequested(real lat, real lon)
     signal orbitPerspectiveRequested(real lat, real lon)
     signal closeRequested()
+
+    Behavior on height {
+        NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+    }
 
     function loadDossier(name, lat, lon, displayName) {
         root.placeName = name || "TARGET SECTOR";
@@ -40,6 +45,7 @@ Rectangle {
         root.placeWeather = {};
         root.placeContext = {};
         root.isLoading = true;
+        root.collapsed = false;
         root.visible = true;
 
         var xhr = new XMLHttpRequest();
@@ -92,29 +98,73 @@ Rectangle {
             }
 
             Text {
-                text: "DOSSIER // SECTOR RECON"
+                text: root.collapsed ? ("DOSSIER: " + root.placeName) : "DOSSIER // SECTOR RECON"
                 color: "#00f0ff"
                 font.bold: true
-                font.pixelSize: 11
+                font.pixelSize: 10
                 font.family: "Monospace"
                 font.letterSpacing: 1.1
+                elide: Text.ElideRight
+                Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
             }
 
-            Item { Layout.fillWidth: true }
-
-            Text {
-                text: "×"
-                color: "#94a3b8"
-                font.pixelSize: 20
+            Row {
                 Layout.alignment: Qt.AlignVCenter
+                spacing: 6
 
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        root.visible = false;
-                        root.closeRequested();
+                // Collapse Button
+                Rectangle {
+                    width: 20
+                    height: 18
+                    color: btnDossierCollapse.containsMouse ? "#3300f0ff" : "#1a00f0ff"
+                    border.color: "#00f0ff"
+                    border.width: 1
+                    radius: 2
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: root.collapsed ? "▼" : "▲"
+                        color: "#00f0ff"
+                        font.pixelSize: 9
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        id: btnDossierCollapse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.collapsed = !root.collapsed
+                    }
+                }
+
+                // Close Button
+                Rectangle {
+                    width: 20
+                    height: 18
+                    color: btnDossierClose.containsMouse ? "#33ff0055" : "#1aff0055"
+                    border.color: "#ff0055"
+                    border.width: 1
+                    radius: 2
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "×"
+                        color: "#ff0055"
+                        font.pixelSize: 12
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        id: btnDossierClose
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            root.visible = false;
+                            root.closeRequested();
+                        }
                     }
                 }
             }
@@ -124,6 +174,7 @@ Rectangle {
             Layout.fillWidth: true
             height: 1
             color: "#3300f0ff"
+            visible: !root.collapsed
         }
 
         // Scrollable Dossier Content
@@ -131,8 +182,14 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
+            visible: !root.collapsed
+            opacity: root.collapsed ? 0.0 : 1.0
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
             ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+            Behavior on opacity {
+                NumberAnimation { duration: 180 }
+            }
 
             ColumnLayout {
                 width: parent.width

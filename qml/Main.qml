@@ -26,12 +26,34 @@ Window {
         settings.allowRunningInsecureContent: true
     }
 
+    property bool allCardsCollapsed: false
+
+    function toggleAllCards() {
+        allCardsCollapsed = !allCardsCollapsed;
+        headerBar.allCollapsed = allCardsCollapsed;
+        layerPanel.collapsed = allCardsCollapsed;
+        commandBar.collapsed = allCardsCollapsed;
+        alertBanner.collapsed = allCardsCollapsed;
+        bottomTelemetryBar.collapsed = allCardsCollapsed;
+        if (placeDossierCard.visible) placeDossierCard.collapsed = allCardsCollapsed;
+        if (telemetryCard.visible) telemetryCard.collapsed = allCardsCollapsed;
+    }
+
+    Shortcut {
+        sequence: "H"
+        onActivated: toggleAllCards()
+    }
+
     // Top Header Banner
     HeaderBar {
         id: headerBar
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
+
+        onToggleHudClicked: {
+            toggleAllCards();
+        }
     }
 
     // Universal Geocoding & Sensor Search Bar (Top-Center)

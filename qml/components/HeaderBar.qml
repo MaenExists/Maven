@@ -11,6 +11,9 @@ Rectangle {
 
     property string threatLevel: "ELEVATED"
     property string utcTime: ""
+    property bool allCollapsed: false
+
+    signal toggleHudClicked()
 
     Timer {
         interval: 1000
@@ -143,6 +146,43 @@ Rectangle {
                     font.bold: true
                     font.pixelSize: 9
                     font.letterSpacing: 1
+                }
+            }
+
+            // Master HUD Collapse / Cinematic View Button
+            Rectangle {
+                width: 95
+                height: 22
+                color: btnCleanView.containsMouse ? "#3300f0ff" : "#1a00f0ff"
+                border.color: "#00f0ff"
+                border.width: 1
+                radius: 2
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 4
+                    Text {
+                        text: root.allCollapsed ? "👁️" : "🌐"
+                        font.pixelSize: 9
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                    Text {
+                        text: root.allCollapsed ? "EXPAND HUD" : "CLEAN VIEW"
+                        color: "#00f0ff"
+                        font.bold: true
+                        font.pixelSize: 8
+                        font.letterSpacing: 0.8
+                        font.family: "Monospace"
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
+
+                MouseArea {
+                    id: btnCleanView
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.toggleHudClicked()
                 }
             }
         }

@@ -4,13 +4,19 @@ import QtQuick.Layouts
 
 Rectangle {
     id: root
-    height: 38
+    height: collapsed ? 24 : 38
     color: "#e6080c14"
     border.color: "#4d00f0ff"
     border.width: 1
     radius: 3
+    clip: true
 
     property string currentBasemap: "SATELLITE"
+    property bool collapsed: false
+
+    Behavior on height {
+        NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+    }
 
     signal basemapClicked()
     signal sunClicked()
@@ -22,10 +28,37 @@ Rectangle {
     signal chokepointClicked()
     signal clearClicked()
 
+    // Mini Collapsed Pill
+    Item {
+        anchors.fill: parent
+        visible: root.collapsed
+
+        Row {
+            anchors.centerIn: parent
+            spacing: 6
+            Text { text: "⚙"; font.pixelSize: 10; color: "#00f0ff"; anchors.verticalCenter: parent.verticalCenter }
+            Text {
+                text: "COMMAND DOCK ▾"
+                color: "#94a3b8"
+                font.bold: true
+                font.pixelSize: 9
+                font.family: "Monospace"
+                anchors.verticalCenter: parent.verticalCenter
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.collapsed = false
+        }
+    }
+
     RowLayout {
         anchors.fill: parent
         anchors.margins: 4
         spacing: 6
+        visible: !root.collapsed
 
         // Basemap Switcher
         Button {
@@ -254,6 +287,26 @@ Rectangle {
                 radius: 2
             }
             onClicked: root.clearClicked()
+        }
+
+        // Collapse Button
+        Button {
+            id: btnDockCollapse
+            Layout.fillHeight: true
+            contentItem: Text {
+                anchors.centerIn: parent
+                text: "▲"
+                color: "#64748b"
+                font.bold: true
+                font.pixelSize: 8
+            }
+            background: Rectangle {
+                color: btnDockCollapse.hovered ? "#33ffffff" : "#08ffffff"
+                border.color: "#334155"
+                border.width: 1
+                radius: 2
+            }
+            onClicked: root.collapsed = true
         }
     }
 }
