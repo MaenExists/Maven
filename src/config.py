@@ -38,7 +38,7 @@ class Config:
     MAX_VESSEL_ENTITIES: int = 800
     MAX_FIRE_ENTITIES: int = 1000
     MAX_QUAKE_ENTITIES: int = 500
-    MAX_CAMERA_ENTITIES: int = 1500
+    MAX_CAMERA_ENTITIES: int = 15000
 
     # User Agent
     HTTP_USER_AGENT: str = "Maven-Geospatial-Intelligence/1.0"

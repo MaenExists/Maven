@@ -7,8 +7,11 @@ and major global municipal and landmark street webcams with live streaming video
 import json
 import logging
 import math
+import os
+import threading
 import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List
 
 from src.config import CONFIG
@@ -385,25 +388,114 @@ class CameraCollector:
     def __init__(self) -> None:
         self.cached_cameras: List[Dict[str, Any]] = list(self.GLOBAL_LANDMARK_CAMS)
         self.last_fetch: float = 0.0
+        self._lock = threading.Lock()
+        self._load_global_catalog()
+        self._start_background_worker()
 
-    def fetch_live_cameras(self) -> List[Dict[str, Any]]:
-        """Fetch cameras from multiple open sources: TfL, Caltrans, Singapore LTA, and global streams."""
-        now = time.time()
-        if self.cached_cameras and (now - self.last_fetch) < CONFIG.REFRESH_CAMERAS:
-            return self.cached_cameras
+    def _load_global_catalog(self) -> None:
+        """Load deterministic global surveillance camera catalog from local storage."""
+        data_path = os.path.join(os.path.dirname(__file__), "..", "web", "data", "global_cameras.json")
+        if os.path.exists(data_path):
+            try:
+                with open(data_path, "r", encoding="utf-8") as f:
+                    glob_cams = json.load(f)
+                    if glob_cams:
+                        with self._lock:
+                            existing_ids = {c["id"] for c in self.cached_cameras}
+                            for c in glob_cams:
+                                if c["id"] not in existing_ids:
+                                    self.cached_cameras.append(c)
+                                    existing_ids.add(c["id"])
+                        logger.info("Loaded %d global cameras from %s", len(glob_cams), data_path)
+            except Exception as exc:
+                logger.warning("Failed to load global cameras catalog: %s", exc)
 
-        cams: List[Dict[str, Any]] = list(self.GLOBAL_LANDMARK_CAMS)
+    def _start_background_worker(self) -> None:
+        """Launch background worker to ingest multi-district DOT streams without blocking main thread."""
+        worker_thread = threading.Thread(target=self._background_fetch_loop, daemon=True, name="CameraAggregatorWorker")
+        worker_thread.start()
 
-        # 1. Transport for London JamCams (Includes real MP4 video clips)
+    def _background_fetch_loop(self) -> None:
+        """Continuous background thread refreshing open surveillance camera feeds."""
+        while True:
+            try:
+                self._refresh_live_sources()
+            except Exception as exc:
+                logger.error("Camera aggregation exception: %s", exc)
+            time.sleep(CONFIG.REFRESH_CAMERAS)
+
+    def _refresh_live_sources(self) -> None:
+        """Fetch real-time traffic cameras from TfL, Singapore, and California Caltrans multi-districts."""
+        start_t = time.time()
+        live_cams: List[Dict[str, Any]] = []
+
+        # 1. California Caltrans multi-district ingest (Districts 3, 4, 5, 6, 7, 8, 10, 11, 12)
+        caltrans_districts = [3, 4, 5, 6, 7, 8, 10, 11, 12]
+
+        def _fetch_caltrans_district(d_num: int) -> List[Dict[str, Any]]:
+            d_cams: List[Dict[str, Any]] = []
+            url = f"https://cwwp2.dot.ca.gov/data/d{d_num}/cctv/cctvStatusD{d_num:02d}.json"
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": CONFIG.HTTP_USER_AGENT})
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+
+                for entry in data.get("data", []):
+                    cctv = entry.get("cctv", {})
+                    loc = cctv.get("location", {})
+                    img_data = cctv.get("imageData", {})
+                    lat = loc.get("latitude")
+                    lon = loc.get("longitude")
+                    if lat is None or lon is None:
+                        continue
+
+                    img_url = img_data.get("static", {}).get("currentImageURL", "")
+                    streaming_url = img_data.get("streamingVideoURL", "")
+                    loc_name = loc.get("locationName", "California Highway CCTV")
+                    nearby = loc.get("nearbyPlace", f"District {d_num}")
+                    county = loc.get("county", "CA")
+
+                    if img_url:
+                        stream_t = "hls" if streaming_url.endswith(".m3u8") else ("video" if streaming_url else "snapshot")
+                        cam_id = f"cam-caltrans-d{d_num}-{cctv.get('index', len(d_cams))}"
+                        d_cams.append({
+                            "id": cam_id,
+                            "name": f"{loc_name} ({nearby})",
+                            "city": f"California ({county})",
+                            "country": "USA",
+                            "latitude": float(lat),
+                            "longitude": float(lon),
+                            "image_url": img_url,
+                            "stream_url": streaming_url if streaming_url else img_url,
+                            "stream_type": stream_t,
+                            "type": "live_cam",
+                            "direction": loc.get("direction", "Highway Corridor"),
+                            "is_hub": False,
+                            "priority": "standard",
+                        })
+            except Exception as e:
+                logger.debug("Caltrans D%d fetch failed: %s", d_num, e)
+            return d_cams
+
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            future_to_d = {executor.submit(_fetch_caltrans_district, d): d for d in caltrans_districts}
+            for fut in as_completed(future_to_d):
+                try:
+                    res = fut.result()
+                    live_cams.extend(res)
+                except Exception:
+                    pass
+
+        # 2. Transport for London JamCams (Includes real MP4 video clips)
         try:
             req = urllib.request.Request(
                 CONFIG.TFL_JAMCAMS_URL,
                 headers={"User-Agent": CONFIG.HTTP_USER_AGENT},
             )
-            with urllib.request.urlopen(req, timeout=4) as resp:
+            with urllib.request.urlopen(req, timeout=5) as resp:
                 tfl_data = json.loads(resp.read().decode("utf-8"))
 
-            for item in tfl_data[:500]:
+            for item in tfl_data[:600]:
                 lat = item.get("lat")
                 lon = item.get("lon")
                 if lat is None or lon is None:
@@ -424,10 +516,11 @@ class CameraCollector:
                         view_dir = val
 
                 if img_url:
-                    cams.append({
-                        "id": f"cam-tfl-{item.get('id', len(cams))}",
+                    live_cams.append({
+                        "id": f"cam-tfl-{item.get('id', len(live_cams))}",
                         "name": item.get("commonName", "TfL Street Cam"),
                         "city": "London, UK",
+                        "country": "UK",
                         "latitude": float(lat),
                         "longitude": float(lon),
                         "image_url": img_url,
@@ -435,17 +528,19 @@ class CameraCollector:
                         "stream_type": "video" if video_url else "snapshot",
                         "type": "live_cam",
                         "direction": view_dir,
+                        "is_hub": False,
+                        "priority": "standard",
                     })
         except Exception as exc:
             logger.warning("TfL camera fetch failed: %s", exc)
 
-        # 2. Singapore LTA Expressway Cameras
+        # 3. Singapore LTA Expressway Cameras
         try:
             req = urllib.request.Request(
                 "https://api.data.gov.sg/v1/transport/traffic-images",
                 headers={"User-Agent": CONFIG.HTTP_USER_AGENT},
             )
-            with urllib.request.urlopen(req, timeout=4) as resp:
+            with urllib.request.urlopen(req, timeout=5) as resp:
                 sg_data = json.loads(resp.read().decode("utf-8"))
                 sg_items = sg_data.get("items", [])
                 sg_cameras = sg_items[0].get("cameras", []) if sg_items else []
@@ -457,10 +552,11 @@ class CameraCollector:
                 img = sc.get("image", "")
                 cam_id = sc.get("camera_id", "")
                 if lat and lon and img:
-                    cams.append({
+                    live_cams.append({
                         "id": f"cam-sg-{cam_id}",
                         "name": f"Singapore Expressway Cam {cam_id}",
                         "city": "Singapore",
+                        "country": "Singapore",
                         "latitude": float(lat),
                         "longitude": float(lon),
                         "image_url": img,
@@ -468,54 +564,52 @@ class CameraCollector:
                         "stream_type": "snapshot",
                         "type": "live_cam",
                         "direction": "Expressway Corridor",
+                        "is_hub": False,
+                        "priority": "standard",
                     })
         except Exception as exc:
             logger.warning("Singapore LTA camera fetch failed: %s", exc)
 
-        # 3. Caltrans California Highway CCTV & Video Feeds
-        try:
-            req = urllib.request.Request(
-                CONFIG.CALTRANS_D04_URL,
-                headers={"User-Agent": CONFIG.HTTP_USER_AGENT},
-            )
-            with urllib.request.urlopen(req, timeout=4) as resp:
-                caltrans_data = json.loads(resp.read().decode("utf-8"))
+        # Merge base catalog + live feeds with deduplication
+        merged: List[Dict[str, Any]] = list(self.GLOBAL_LANDMARK_CAMS)
 
-            for entry in caltrans_data.get("data", [])[:400]:
-                cctv = entry.get("cctv", {})
-                loc = cctv.get("location", {})
-                img_data = cctv.get("imageData", {})
-                lat = loc.get("latitude")
-                lon = loc.get("longitude")
-                if lat is None or lon is None:
-                    continue
+        # Re-read global catalog
+        data_path = os.path.join(os.path.dirname(__file__), "..", "web", "data", "global_cameras.json")
+        if os.path.exists(data_path):
+            try:
+                with open(data_path, "r", encoding="utf-8") as f:
+                    glob_cams = json.load(f)
+                    merged.extend(glob_cams)
+            except Exception:
+                pass
 
-                img_url = img_data.get("static", {}).get("currentImageURL", "")
-                streaming_url = img_data.get("streamingVideoURL", "")
-                loc_name = loc.get("locationName", "Highway Cam")
-                nearby = loc.get("nearbyPlace", "California")
+        merged.extend(live_cams)
 
-                if img_url:
-                    stream_t = "hls" if streaming_url.endswith(".m3u8") else ("video" if streaming_url else "snapshot")
-                    cams.append({
-                        "id": f"cam-caltrans-{cctv.get('index', len(cams))}",
-                        "name": f"{loc_name} ({nearby})",
-                        "city": f"California ({loc.get('county', 'CA')})",
-                        "latitude": float(lat),
-                        "longitude": float(lon),
-                        "image_url": img_url,
-                        "stream_url": streaming_url if streaming_url else img_url,
-                        "stream_type": stream_t,
-                        "type": "live_cam",
-                        "direction": loc.get("direction", "Highway Overview"),
-                    })
-        except Exception as exc:
-            logger.warning("Caltrans camera fetch failed: %s", exc)
+        # Deduplicate
+        seen_ids = set()
+        deduped: List[Dict[str, Any]] = []
+        for cam in merged:
+            cid = cam.get("id")
+            if cid and cid not in seen_ids:
+                seen_ids.add(cid)
+                deduped.append(cam)
 
-        self.cached_cameras = cams
-        self.last_fetch = now
-        logger.info("Total cameras aggregated: %d", len(self.cached_cameras))
-        return self.cached_cameras
+        with self._lock:
+            self.cached_cameras = deduped
+            self.last_fetch = time.time()
+
+        logger.info(
+            "Camera ingestion cycle completed in %.2fs: %d total cameras online.",
+            time.time() - start_t,
+            len(self.cached_cameras),
+        )
+
+    def fetch_live_cameras(self) -> List[Dict[str, Any]]:
+        """Return cached surveillance and street cameras instantaneously."""
+        with self._lock:
+            if self.cached_cameras:
+                return list(self.cached_cameras)
+        return list(self.GLOBAL_LANDMARK_CAMS)
 
     def get_nearest_cameras(self, lat: float, lon: float, max_km: float = 120.0, limit: int = 6) -> List[Dict[str, Any]]:
         """Find the closest street cameras to a given latitude and longitude."""

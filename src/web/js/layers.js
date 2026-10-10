@@ -325,22 +325,49 @@ class TacticalLayersManager {
     }
 
     updateCameras(cams) {
-        if (!this.visibility.cameras) return;
-        if (this.cameraSource.entities.values.length > 0) return;
+        if (!this.visibility.cameras || !cams || !cams.length) return;
+        if (this.cameraSource.entities.values.length >= cams.length && cams.length > 0) return;
 
-        cams.forEach(cam => {
+        this.cameraSource.entities.suspendEvents();
+        const existingIds = new Set(this.cameraSource.entities.values.map(e => e.id));
+
+        const landmarkCondition = new Cesium.DistanceDisplayCondition(0, 36000000.0);
+        const corridorCondition = new Cesium.DistanceDisplayCondition(0, 9500000.0);
+        const municipalCondition = new Cesium.DistanceDisplayCondition(0, 3800000.0);
+
+        const icon = this._getCameraIcon();
+
+        for (let i = 0; i < cams.length; i++) {
+            const cam = cams[i];
+            if (existingIds.has(cam.id)) continue;
+            existingIds.add(cam.id);
+
+            // Level of Detail (LOD):
+            // - Hubs / high priority / famous landmarks visible globally from orbit
+            // - Metropolitan corridors visible below 9.5M meters
+            // - Dense municipal & highway CCTV visible below 3.8M meters
+            let distCond = municipalCondition;
+            if (cam.is_hub || cam.priority === 'high' || i < 120 || cam.id.startsWith('cam-tokyo-') || cam.id.startsWith('cam-nyc-') || cam.id.startsWith('cam-london-')) {
+                distCond = landmarkCondition;
+            } else if (cam.stream_type === 'youtube' || cam.direction === 'Plaza Overview' || cam.direction === 'Waterfront Vista') {
+                distCond = corridorCondition;
+            }
+
             this.cameraSource.entities.add({
                 id: cam.id,
                 position: Cesium.Cartesian3.fromDegrees(cam.longitude, cam.latitude, 25),
                 billboard: {
-                    image: this._getCameraIcon(),
+                    image: icon,
                     scale: 0.85,
                     verticalOrigin: Cesium.VerticalOrigin.CENTER,
-                    heightReference: Cesium.HeightReference.NONE
+                    heightReference: Cesium.HeightReference.NONE,
+                    distanceDisplayCondition: distCond
                 },
                 properties: cam
             });
-        });
+        }
+
+        this.cameraSource.entities.resumeEvents();
     }
 
     updateConflicts(conflicts) {
