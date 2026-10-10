@@ -111,6 +111,22 @@ class TestLocalTacticalServer(unittest.TestCase):
             self.assertIn("data", f_data)
             self.assertGreater(f_data["count"], 0)
 
+    def test_search_and_dossier_endpoints(self):
+        search_url = "http://127.0.0.1:9876/api/search?q=Tokyo"
+        with urllib.request.urlopen(search_url, timeout=10) as r:
+            s_data = json.loads(r.read().decode())
+            self.assertEqual(s_data["query"], "Tokyo")
+            self.assertGreater(len(s_data["results"]), 0)
+            self.assertIn("lat", s_data["results"][0])
+
+        dossier_url = "http://127.0.0.1:9876/api/intel/dossier?lat=35.6762&lon=139.6503&name=Tokyo"
+        with urllib.request.urlopen(dossier_url, timeout=10) as r:
+            d_data = json.loads(r.read().decode())
+            self.assertEqual(d_data["name"], "Tokyo")
+            self.assertIn("summary", d_data)
+            self.assertIn("cameras", d_data)
+            self.assertIn("tactical_context", d_data)
+
 
 if __name__ == "__main__":
     unittest.main()

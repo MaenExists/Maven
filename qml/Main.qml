@@ -34,11 +34,26 @@ Window {
         anchors.right: parent.right
     }
 
+    // Universal Geocoding & Sensor Search Bar (Top-Center)
+    SearchBar {
+        id: searchBar
+        anchors.top: headerBar.bottom
+        anchors.topMargin: 8
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: Math.min(parent.width - 32, 580)
+        z: 200
+
+        onPlaceSelected: function(name, lat, lon, displayName, category) {
+            globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.flyTo(" + lon + ", " + lat + ", 150000, -90, 0); }");
+            placeDossierCard.loadDossier(name, lat, lon, displayName);
+        }
+    }
+
     // Top Operational Command Bar
     CommandBar {
         id: commandBar
-        anchors.top: headerBar.bottom
-        anchors.topMargin: 8
+        anchors.top: searchBar.bottom
+        anchors.topMargin: 6
         anchors.horizontalCenter: parent.horizontalCenter
         width: Math.min(parent.width - 32, 780)
 
@@ -105,16 +120,39 @@ Window {
         anchors.right: parent.right
         anchors.rightMargin: 16
         width: Math.min(380, parent.width * 0.35)
+        visible: !placeDossierCard.visible
 
         onAlertClicked: {
             globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.flyTo(42.60, 13.80, 200000); }");
         }
     }
 
+    // Sector Intelligence Dossier Card (Right)
+    PlaceDossierCard {
+        id: placeDossierCard
+        anchors.top: commandBar.bottom
+        anchors.topMargin: 12
+        anchors.right: parent.right
+        anchors.rightMargin: 16
+        z: 150
+
+        onCameraSelected: function(camData) {
+            cameraModal.open(camData);
+        }
+
+        onGroundPerspectiveRequested: function(lat, lon) {
+            globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.flyTo(" + lon + ", " + lat + ", 500, -25, 0); }");
+        }
+
+        onOrbitPerspectiveRequested: function(lat, lon) {
+            globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.flyTo(" + lon + ", " + lat + ", 150000, -90, 0); }");
+        }
+    }
+
     // Floating Target Telemetry Card (Right)
     TelemetryCard {
         id: telemetryCard
-        anchors.top: alertBanner.bottom
+        anchors.top: placeDossierCard.visible ? placeDossierCard.bottom : (alertBanner.visible ? alertBanner.bottom : commandBar.bottom)
         anchors.topMargin: 12
         anchors.right: parent.right
         anchors.rightMargin: 16
@@ -137,6 +175,11 @@ Window {
     CameraModal {
         id: cameraModal
         anchors.centerIn: parent
+        z: 300
+
+        onFlyToStreetRequested: function(lat, lon) {
+            globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.flyTo(" + lon + ", " + lat + ", 400, -20, 0); }");
+        }
     }
 
     // Periodic camera position polling for native bottom telemetry bar

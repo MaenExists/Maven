@@ -297,11 +297,16 @@ class MavenGlobeApp {
         } catch (e) {}
     }
 
-    flyTo(lon, lat, height = 150000.0) {
-        window.tacticalSound.playClick();
+    flyTo(lon, lat, height = 150000.0, pitchDeg = -90.0, headingDeg = 0.0) {
+        if (window.tacticalSound) window.tacticalSound.playClick();
         this.viewer.camera.flyTo({
             destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
-            duration: 2.0
+            orientation: {
+                heading: Cesium.Math.toRadians(headingDeg),
+                pitch: Cesium.Math.toRadians(pitchDeg),
+                roll: 0.0
+            },
+            duration: 2.2
         });
     }
 
