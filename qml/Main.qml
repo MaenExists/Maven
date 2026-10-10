@@ -269,7 +269,7 @@ Window {
 
     // Periodic camera position polling for native bottom telemetry bar
     Timer {
-        interval: 300
+        interval: 1000
         running: true
         repeat: true
         onTriggered: {

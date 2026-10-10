@@ -1,10 +1,12 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
+import QtWebEngine
 
 Rectangle {
     id: root
-    width: 620
-    height: 490
+    width: Math.min(parent.width - 40, 780)
+    height: Math.min(parent.height - 50, 560)
     color: "#0a0f18"
     border.color: "#00f0ff"
     border.width: 1
@@ -16,6 +18,7 @@ Rectangle {
     property string camCoords: "51.5074, -0.1278"
     property string camImageUrl: ""
     property string camStreamUrl: ""
+    property string camStreamType: "video"
     property real camLat: 0.0
     property real camLon: 0.0
 
@@ -27,245 +30,201 @@ Rectangle {
         root.camLat = data.latitude || 0.0;
         root.camLon = data.longitude || 0.0;
         root.camCoords = (data.latitude ? data.latitude.toFixed(4) : "0") + ", " + (data.longitude ? data.longitude.toFixed(4) : "0");
-        root.camImageUrl = data.image_url ? ("/api/proxy/image?url=" + encodeURIComponent(data.image_url)) : "";
-        root.camStreamUrl = data.stream_url || "";
+        root.camImageUrl = data.image_url || "";
+        root.camStreamUrl = data.stream_url || data.image_url || "";
+        root.camStreamType = data.stream_type || (root.camStreamUrl.indexOf("youtube") !== -1 ? "youtube" : (root.camStreamUrl.indexOf(".m3u8") !== -1 ? "hls" : "video"));
+
+        var query = "url=" + encodeURIComponent(root.camStreamUrl) +
+                    "&type=" + encodeURIComponent(root.camStreamType) +
+                    "&name=" + encodeURIComponent(root.camTitle) +
+                    "&city=" + encodeURIComponent(root.camLocation) +
+                    "&lat=" + root.camLat.toFixed(4) +
+                    "&lon=" + root.camLon.toFixed(4) +
+                    "&img=" + encodeURIComponent(root.camImageUrl);
+        playerWebEngine.url = "http://127.0.0.1:8765/player.html?" + query;
         root.visible = true;
     }
 
-    Column {
-        anchors.fill: parent
-        anchors.margins: 14
-        spacing: 10
+    function close() {
+        playerWebEngine.url = "about:blank";
+        root.visible = false;
+    }
 
-        // Header
-        Item {
-            width: parent.width
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: 10
+        spacing: 8
+
+        // Header Bar
+        RowLayout {
+            Layout.fillWidth: true
             height: 24
 
+            Rectangle {
+                width: 8
+                height: 8
+                radius: 4
+                color: "#ff0055"
+                Layout.alignment: Qt.AlignVCenter
+
+                SequentialAnimation on opacity {
+                    loops: Animation.Infinite
+                    PropertyAnimation { to: 0.2; duration: 500 }
+                    PropertyAnimation { to: 1.0; duration: 500 }
+                }
+            }
+
             Text {
-                text: "LIVE SURVEILLANCE FEED // CLASSIFIED"
+                text: "LIVE SURVEILLANCE FEED // CLASSIFIED CCTV DOWNLINK"
                 color: "#00f0ff"
                 font.bold: true
                 font.pixelSize: 11
                 font.letterSpacing: 1.2
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
+                font.family: "Monospace"
+                Layout.fillWidth: true
             }
 
             Text {
                 text: "×"
                 color: "#94a3b8"
-                font.pixelSize: 20
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
+                font.pixelSize: 22
+                font.bold: true
 
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.visible = false
+                    onClicked: root.close()
                 }
             }
         }
 
         Rectangle {
-            width: parent.width
+            Layout.fillWidth: true
             height: 1
             color: "#3300f0ff"
         }
 
-        // Camera Preview Frame
+        // Live CCTV Video Player Frame
         Rectangle {
-            width: parent.width
-            height: 280
+            Layout.fillWidth: true
+            Layout.fillHeight: true
             color: "#000000"
             border.color: "#1e293b"
             border.width: 1
+            clip: true
 
-            Image {
-                id: camImg
+            WebEngineView {
+                id: playerWebEngine
                 anchors.fill: parent
-                fillMode: Image.PreserveAspectFit
-                source: root.camImageUrl
-                cache: false
-
-                // Auto-refresh snapshot every 5 seconds
-                Timer {
-                    interval: 5000
-                    running: root.visible
-                    repeat: true
-                    onTriggered: {
-                        if (root.camImageUrl) {
-                            camImg.source = "";
-                            camImg.source = root.camImageUrl + "&t=" + Date.now();
-                        }
-                    }
-                }
-            }
-
-            // REC Indicator
-            Rectangle {
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.margins: 10
-                width: 58
-                height: 22
-                color: "#99000000"
-                radius: 2
-
-                Row {
-                    anchors.centerIn: parent
-                    spacing: 5
-                    Rectangle {
-                        width: 7
-                        height: 7
-                        radius: 3.5
-                        color: "#ff0055"
-                        anchors.verticalCenter: parent.verticalCenter
-                        SequentialAnimation on opacity {
-                            loops: Animation.Infinite
-                            PropertyAnimation { to: 0.2; duration: 500 }
-                            PropertyAnimation { to: 1.0; duration: 500 }
-                        }
-                    }
-                    Text {
-                        text: "LIVE"
-                        color: "#ff0055"
-                        font.bold: true
-                        font.pixelSize: 10
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-                }
+                settings.javascriptEnabled: true
+                settings.webGLEnabled: true
+                settings.localContentCanAccessRemoteUrls: true
+                settings.allowRunningInsecureContent: true
+                settings.playbackRequiresUserGesture: false
             }
         }
 
-        // Camera Metadata Grid
-        Grid {
-            width: parent.width
-            columns: 2
-            spacing: 8
+        // Metadata Readout Strip
+        Rectangle {
+            Layout.fillWidth: true
+            height: 26
+            color: "#08ffffff"
+            border.color: "#1e293b"
+            border.width: 1
 
-            Rectangle {
-                width: (parent.width - 8) / 2
-                height: 28
-                color: "#08ffffff"
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 8
+                anchors.rightMargin: 8
+                spacing: 12
+
                 Row {
-                    anchors.centerIn: parent
-                    spacing: 6
-                    Text { text: "UNIT:"; color: "#64748b"; font.pixelSize: 10 }
-                    Text { text: root.camTitle; color: "#00f0ff"; font.bold: true; font.pixelSize: 10; elide: Text.ElideRight }
+                    spacing: 4
+                    Text { text: "TARGET:"; color: "#64748b"; font.pixelSize: 9; font.family: "Monospace" }
+                    Text { text: root.camTitle; color: "#00f0ff"; font.bold: true; font.pixelSize: 9; font.family: "Monospace"; elide: Text.ElideRight; width: 240 }
                 }
-            }
 
-            Rectangle {
-                width: (parent.width - 8) / 2
-                height: 28
-                color: "#08ffffff"
                 Row {
-                    anchors.centerIn: parent
-                    spacing: 6
-                    Text { text: "SECTOR:"; color: "#64748b"; font.pixelSize: 10 }
-                    Text { text: root.camLocation; color: "#e2e8f0"; font.pixelSize: 10; elide: Text.ElideRight }
+                    spacing: 4
+                    Text { text: "LOC:"; color: "#64748b"; font.pixelSize: 9; font.family: "Monospace" }
+                    Text { text: root.camLocation; color: "#e2e8f0"; font.pixelSize: 9; font.family: "Monospace"; elide: Text.ElideRight; width: 180 }
                 }
-            }
 
-            Rectangle {
-                width: (parent.width - 8) / 2
-                height: 28
-                color: "#08ffffff"
                 Row {
-                    anchors.centerIn: parent
-                    spacing: 6
-                    Text { text: "COORDS:"; color: "#64748b"; font.pixelSize: 10 }
-                    Text { text: root.camCoords; color: "#10b981"; font.bold: true; font.pixelSize: 10 }
+                    spacing: 4
+                    Text { text: "FIX:"; color: "#64748b"; font.pixelSize: 9; font.family: "Monospace" }
+                    Text { text: root.camCoords; color: "#10b981"; font.bold: true; font.pixelSize: 9; font.family: "Monospace" }
                 }
-            }
 
-            Rectangle {
-                width: (parent.width - 8) / 2
-                height: 28
-                color: "#08ffffff"
-                Row {
-                    anchors.centerIn: parent
-                    spacing: 6
-                    Text { text: "STATUS:"; color: "#64748b"; font.pixelSize: 10 }
-                    Text { text: "STREAMING"; color: "#10b981"; font.bold: true; font.pixelSize: 10 }
+                Item { Layout.fillWidth: true }
+
+                Text {
+                    text: "● 60 FPS HD"
+                    color: "#ff0055"
+                    font.bold: true
+                    font.pixelSize: 9
+                    font.family: "Monospace"
                 }
             }
         }
 
         // Action Toolbar
-        Row {
-            width: parent.width
-            spacing: 10
+        RowLayout {
+            Layout.fillWidth: true
+            height: 32
+            spacing: 8
 
-            Rectangle {
-                width: (parent.width - 20) / 3
-                height: 32
-                color: btnRef.containsMouse ? "#3300f0ff" : "#1a00f0ff"
-                border.color: "#00f0ff"
-                border.width: 1
-                radius: 2
-
-                Text {
+            Button {
+                id: btnStreet
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                contentItem: Text {
                     anchors.centerIn: parent
-                    text: "⟳ REFRESH FEED"
-                    color: "#00f0ff"
-                    font.bold: true
-                    font.pixelSize: 10
-                    font.family: "Monospace"
-                }
-
-                MouseArea {
-                    id: btnRef
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        if (root.camImageUrl) {
-                            camImg.source = "";
-                            camImg.source = root.camImageUrl + "&t=" + Date.now();
-                        }
-                    }
-                }
-            }
-
-            Rectangle {
-                width: (parent.width - 20) / 3
-                height: 32
-                color: btnStreet.containsMouse ? "#3310b981" : "#1a10b981"
-                border.color: "#10b981"
-                border.width: 1
-                radius: 2
-
-                Text {
-                    anchors.centerIn: parent
-                    text: "🎯 3D STREET VIEW"
+                    text: "🎯 3D STREET VIEW PERSPECTIVE"
                     color: "#10b981"
                     font.bold: true
                     font.pixelSize: 10
                     font.family: "Monospace"
                 }
-
-                MouseArea {
-                    id: btnStreet
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        root.flyToStreetRequested(root.camLat, root.camLon);
-                    }
+                background: Rectangle {
+                    color: btnStreet.hovered ? "#3310b981" : "#1a10b981"
+                    border.color: "#10b981"
+                    border.width: 1
+                    radius: 2
+                }
+                onClicked: {
+                    root.flyToStreetRequested(root.camLat, root.camLon);
                 }
             }
 
-            Rectangle {
-                width: (parent.width - 20) / 3
-                height: 32
-                color: btnCloseFeed.containsMouse ? "#33ffffff" : "#0dffffff"
-                border.color: "#334155"
-                border.width: 1
-                radius: 2
+            Button {
+                id: btnReconnect
+                Layout.preferredWidth: 140
+                Layout.fillHeight: true
+                contentItem: Text {
+                    anchors.centerIn: parent
+                    text: "⟳ RECONNECT"
+                    color: "#00f0ff"
+                    font.bold: true
+                    font.pixelSize: 10
+                    font.family: "Monospace"
+                }
+                background: Rectangle {
+                    color: btnReconnect.hovered ? "#3300f0ff" : "#1a00f0ff"
+                    border.color: "#00f0ff"
+                    border.width: 1
+                    radius: 2
+                }
+                onClicked: {
+                    playerWebEngine.reload();
+                }
+            }
 
-                Text {
+            Button {
+                id: btnDismiss
+                Layout.preferredWidth: 100
+                Layout.fillHeight: true
+                contentItem: Text {
                     anchors.centerIn: parent
                     text: "DISMISS"
                     color: "#94a3b8"
@@ -273,14 +232,13 @@ Rectangle {
                     font.pixelSize: 10
                     font.family: "Monospace"
                 }
-
-                MouseArea {
-                    id: btnCloseFeed
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.visible = false
+                background: Rectangle {
+                    color: btnDismiss.hovered ? "#33ffffff" : "#0dffffff"
+                    border.color: "#334155"
+                    border.width: 1
+                    radius: 2
                 }
+                onClicked: root.close()
             }
         }
     }

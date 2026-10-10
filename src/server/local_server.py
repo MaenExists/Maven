@@ -421,8 +421,9 @@ class TacticalServer:
                     "category": p.get("country", "STRATEGIC SECTOR"),
                 })
 
-        # 2. Query OSM Nominatim if query is at least 2 chars and not already matched
-        if len(query_str) >= 2 and len(matches) < 4:
+        # 2. Query OSM Nominatim if query is at least 2 chars and not already an exact preset match
+        exact_match = any(m["name"].lower() == q_norm for m in matches)
+        if not exact_match and len(query_str) >= 2 and len(matches) < 4:
             try:
                 encoded = urllib.parse.quote(query_str)
                 url = f"https://nominatim.openstreetmap.org/search?q={encoded}&format=json&addressdetails=1&limit=6"
@@ -430,7 +431,7 @@ class TacticalServer:
                     url,
                     headers={"User-Agent": CONFIG.HTTP_USER_AGENT},
                 )
-                with urllib.request.urlopen(req, timeout=2.0) as resp:
+                with urllib.request.urlopen(req, timeout=1.2) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
 
                 for item in data:

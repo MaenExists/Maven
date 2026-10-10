@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAVEN // Live Tactical Stream Player</title>
+    <script src="/js/hls.light.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #030712;
+            color: #e2e8f0;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Segoe UI', monospace;
+            user-select: none;
+        }
+
+        #playerContainer {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+        }
+
+        video, iframe, img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border: none;
+            background: #000;
+        }
+
+        /* Tactical HUD Header Overlay */
+        .hud-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 38px;
+            background: linear-gradient(180deg, rgba(6, 12, 24, 0.95) 0%, rgba(6, 12, 24, 0) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 14px;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .hud-live-tag {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: #ff0055;
+            background: rgba(255, 0, 85, 0.15);
+            border: 1px solid rgba(255, 0, 85, 0.5);
+            padding: 3px 8px;
+            border-radius: 2px;
+        }
+
+        .live-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #ff0055;
+            animation: pulse-dot 1.2s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(0.8); }
+        }
+
+        .hud-meta-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        .hud-telemetry-badge {
+            color: #00f0ff;
+            background: rgba(0, 240, 255, 0.12);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            padding: 2px 6px;
+            border-radius: 2px;
+        }
+
+        /* Tactical HUD Footer Overlay */
+        .hud-footer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 44px;
+            background: linear-gradient(0deg, rgba(6, 12, 24, 0.95) 0%, rgba(6, 12, 24, 0) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 14px;
+            z-index: 100;
+        }
+
+        .cam-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .cam-name {
+            font-size: 11px;
+            font-weight: 700;
+            color: #00f0ff;
+            letter-spacing: 0.5px;
+            max-width: 450px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .cam-coords {
+            font-size: 9px;
+            color: #64748b;
+        }
+
+        .hud-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-ctrl {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-family: inherit;
+            cursor: pointer;
+            border-radius: 2px;
+            transition: all 0.15s ease;
+        }
+
+        .btn-ctrl:hover {
+            background: rgba(0, 240, 255, 0.2);
+            border-color: #00f0ff;
+            color: #00f0ff;
+        }
+
+        /* Scanline Overlay */
+        .scanlines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+            background-size: 100% 3px;
+            pointer-events: none;
+            opacity: 0.45;
+            z-index: 90;
+        }
+
+        /* Error/Loading State */
+        #statusNotice {
+            position: absolute;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            color: #94a3b8;
+            font-size: 12px;
+            z-index: 80;
+            text-align: center;
+            padding: 20px;
+            background: rgba(6, 12, 24, 0.85);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="playerContainer">
+        <!-- Scanline Filter -->
+        <div class="scanlines"></div>
+
+        <!-- Top Status HUD -->
+        <div class="hud-header">
+            <div class="hud-live-tag">
+                <div class="live-dot"></div>
+                <span>LIVE FEED</span>
+            </div>
+            <div class="hud-meta-right">
+                <span class="hud-telemetry-badge" id="hudQuality">1080P // 60FPS</span>
+                <span id="hudClock">UTC --:--:--</span>
+            </div>
+        </div>
+
+        <!-- Media Display Area -->
+        <div id="mediaArea" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+            <video id="videoElement" autoplay playsinline muted style="display: none;"></video>
+            <iframe id="iframeElement" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="display: none;"></iframe>
+            <img id="imageElement" alt="Surveillance Stream" style="display: none;">
+        </div>
+
+        <!-- Status / Error Notification -->
+        <div id="statusNotice">
+            <span id="statusMessage">ESTABLISHING SATELLITE / CCTV DOWNLINK...</span>
+            <button class="btn-ctrl" onclick="reloadStream()">RECONNECT</button>
+        </div>
+
+        <!-- Bottom Controls HUD -->
+        <div class="hud-footer">
+            <div class="cam-info">
+                <div class="cam-name" id="hudCamName">SURVEILLANCE UNIT</div>
+                <div class="cam-coords" id="hudCamCoords">00.0000° N, 000.0000° E // METROPOLITAN SECTOR</div>
+            </div>
+            <div class="hud-controls">
+                <button class="btn-ctrl" id="btnAudio" onclick="toggleAudio()">🔊 UNMUTE</button>
+                <button class="btn-ctrl" onclick="reloadStream()">⟳ RELOAD</button>
+                <button class="btn-ctrl" onclick="toggleFullscreen()">⛶ FULLSCREEN</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Parse Query Parameters
+        const params = new URLSearchParams(window.location.search);
+        const streamUrl = params.get('url') || '';
+        const streamType = params.get('type') || '';
+        const camName = params.get('name') || 'SURVEILLANCE UNIT';
+        const camCity = params.get('city') || 'METROPOLITAN SECTOR';
+        const camLat = params.get('lat') || '0.0000';
+        const camLon = params.get('lon') || '0.0000';
+        const posterImg = params.get('img') || '';
+
+        // HUD Elements
+        document.getElementById('hudCamName').textContent = camName.toUpperCase();
+        document.getElementById('hudCamCoords').textContent = `${camLat}° N, ${camLon}° E // ${camCity.toUpperCase()}`;
+
+        // Live Clock
+        function updateClock() {
+            const now = new Date();
+            const utc = now.toUTCString().split(' ')[4] + ' UTC';
+            document.getElementById('hudClock').textContent = utc;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        const videoEl = document.getElementById('videoElement');
+        const iframeEl = document.getElementById('iframeElement');
+        const imgEl = document.getElementById('imageElement');
+        const statusNotice = document.getElementById('statusNotice');
+        const statusMsg = document.getElementById('statusMessage');
+        const hudQuality = document.getElementById('hudQuality');
+
+        let hlsInstance = null;
+
+        function showNotice(msg) {
+            statusMsg.textContent = msg;
+            statusNotice.style.display = 'flex';
+        }
+
+        function hideNotice() {
+            statusNotice.style.display = 'none';
+        }
+
+        // Initialize Player based on stream source and type
+        function initPlayer() {
+            hideNotice();
+
+            // 1. YouTube Live Stream
+            if (streamType === 'youtube' || streamUrl.includes('youtube.com') || streamUrl.includes('youtu.be')) {
+                let videoId = '';
+                if (streamUrl.includes('youtu.be/')) {
+                    videoId = streamUrl.split('youtu.be/')[1].split('?')[0];
+                } else if (streamUrl.includes('v=')) {
+                    videoId = streamUrl.split('v=')[1].split('&')[0];
+                } else if (streamUrl.includes('embed/')) {
+                    videoId = streamUrl.split('embed/')[1].split('?')[0];
+                }
+
+                if (videoId) {
+                    iframeEl.src = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=1&enablejsapi=1&rel=0&modestbranding=1`;
+                    iframeEl.style.display = 'block';
+                    hudQuality.textContent = '1080P // 60FPS LIVE';
+                    return;
+                }
+            }
+
+            // 2. HLS (.m3u8) Stream
+            if (streamType === 'hls' || streamUrl.includes('.m3u8')) {
+                videoEl.style.display = 'block';
+                hudQuality.textContent = 'HLS // 60FPS LIVE';
+
+                if (Hls.isSupported()) {
+                    if (hlsInstance) hlsInstance.destroy();
+                    hlsInstance = new Hls({
+                        enableWorker: true,
+                        lowLatencyMode: true,
+                        backBufferLength: 30
+                    });
+                    hlsInstance.loadSource(streamUrl);
+                    hlsInstance.attachMedia(videoEl);
+                    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+                        videoEl.play().catch(e => console.warn('Autoplay prevented:', e));
+                    });
+                    hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+                        if (data.fatal) {
+                            console.warn('HLS Fatal Error:', data.type);
+                            if (posterImg) fallbackToImage();
+                            else showNotice('STREAM CONNECTION LOST. RETRYING...');
+                        }
+                    });
+                    return;
+                } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+                    // Native Safari / WebKit HLS
+                    videoEl.src = streamUrl;
+                    videoEl.play().catch(() => {});
+                    return;
+                }
+            }
+
+            // 3. Direct Video (.mp4 / stream feed)
+            if (streamType === 'video' || streamUrl.endsWith('.mp4') || streamUrl.includes('.mp4?')) {
+                videoEl.src = streamUrl;
+                videoEl.loop = true;
+                videoEl.style.display = 'block';
+                hudQuality.textContent = 'HD 1080P LIVE';
+                videoEl.play().catch(() => {});
+                return;
+            }
+
+            // 4. MJPEG or Fallback Snapshot Feed
+            fallbackToImage();
+        }
+
+        function fallbackToImage() {
+            videoEl.style.display = 'none';
+            iframeEl.style.display = 'none';
+            imgEl.style.display = 'block';
+            hudQuality.textContent = 'HIGH-FREQ SURVEILLANCE';
+
+            const targetImg = posterImg || streamUrl;
+            if (targetImg) {
+                imgEl.src = targetImg.startsWith('http') ? `/api/proxy/image?url=${encodeURIComponent(targetImg)}` : targetImg;
+
+                // Auto-refresh snapshot every 3 seconds
+                setInterval(() => {
+                    const fresh = targetImg.startsWith('http') ? `/api/proxy/image?url=${encodeURIComponent(targetImg)}&t=${Date.now()}` : targetImg;
+                    imgEl.src = fresh;
+                }, 3000);
+            } else {
+                showNotice('NO ACTIVE VIDEO SIGNAL FOR SECTOR');
+            }
+        }
+
+        function reloadStream() {
+            initPlayer();
+        }
+
+        function toggleAudio() {
+            const btn = document.getElementById('btnAudio');
+            if (videoEl.style.display === 'block') {
+                videoEl.muted = !videoEl.muted;
+                btn.textContent = videoEl.muted ? '🔊 UNMUTE' : '🔇 MUTE';
+            }
+        }
+
+        function toggleFullscreen() {
+            const elem = document.documentElement;
+            if (!document.fullscreenElement) {
+                elem.requestFullscreen().catch(() => {});
+            } else {
+                document.exitFullscreen().catch(() => {});
+            }
+        }
+
+        // Auto-start
+        window.addEventListener('DOMContentLoaded', initPlayer);
+    </script>
+</body>
+</html>

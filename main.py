@@ -57,6 +57,9 @@ def run_gui_app(host: str, port: int) -> None:
         "--enable-zero-copy "
         "--ignore-gpu-blocklist "
         "--enable-webgl "
+        "--enable-accelerated-video-decode "
+        "--enable-accelerated-2d-canvas "
+        "--disable-background-timer-throttling "
         "--num-raster-threads=4"
     )
 

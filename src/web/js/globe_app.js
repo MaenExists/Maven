@@ -42,20 +42,26 @@ class MavenGlobeApp {
                 webgl: {
                     alpha: false,
                     antialias: false,
-                    preserveDrawingBuffer: true,
-                    powerPreference: "high-performance"
+                    preserveDrawingBuffer: false, // Hardware compositor direct blit
+                    powerPreference: "high-performance",
+                    desynchronized: true
                 }
             }
         });
 
+        // Cap resolution scale to prevent GPU overload on 2K/4K high-DPI displays
+        this.viewer.resolutionScale = Math.min(window.devicePixelRatio || 1.0, 1.25);
+
         const scene = this.viewer.scene;
         const globe = scene.globe;
 
-        // Visual and rendering tuning
+        // Visual and rendering tuning for ultra-high framerates
         globe.baseColor = Cesium.Color.fromCssColorString('#0a1120');
         globe.enableLighting = this.sunLightingEnabled;
-        globe.maximumScreenSpaceError = 2.0; // Smoother tile streaming
-        globe.tileCacheSize = 200;
+        globe.maximumScreenSpaceError = 2.5; // High-efficiency tile streaming
+        globe.depthTestAgainstTerrain = false; // Disable heavy terrain collision tests
+        globe.tileCacheSize = 120;
+        scene.highDynamicRange = false;
         scene.backgroundColor = Cesium.Color.fromCssColorString('#030712');
 
         // Apply primary high-detail Earth imagery

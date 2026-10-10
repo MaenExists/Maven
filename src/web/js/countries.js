@@ -24,7 +24,7 @@ class CountriesLayerManager {
                 stroke: Cesium.Color.fromCssColorString('#00f0ff').withAlpha(0.55),
                 fill: Cesium.Color.fromCssColorString('#00f0ff').withAlpha(0.01),
                 strokeWidth: 1.5,
-                clampToGround: true
+                clampToGround: false // Huge performance boost - renders directly on ellipsoid
             });
 
             this.viewer.dataSources.add(geoJsonSource);
