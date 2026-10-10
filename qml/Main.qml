@@ -112,7 +112,7 @@ Window {
         anchors.top: searchBar.bottom
         anchors.topMargin: 6
         anchors.horizontalCenter: parent.horizontalCenter
-        width: Math.min(parent.width - 32, 1100)
+        width: Math.min(parent.width - 32, 1280)
 
         onBasemapClicked: {
             globeWebEngine.runJavaScript("if (window.mavenApp) { var m = window.mavenApp.cycleBasemap(); m; }", function(result) {

@@ -4,7 +4,7 @@ import QtQuick.Layouts
 
 Rectangle {
     id: root
-    height: collapsed ? 24 : 38
+    height: collapsed ? 24 : 40
     color: "#e6080c14"
     border.color: "#4d00f0ff"
     border.width: 1
@@ -64,23 +64,71 @@ Rectangle {
 
     RowLayout {
         anchors.fill: parent
-        anchors.margins: 4
-        spacing: 4
+        anchors.margins: 3
+        spacing: 3
         visible: !root.collapsed
 
+        // Left Navigation Scroll Chevron
+        Button {
+            id: btnScrollLeft
+            Layout.preferredWidth: 20
+            Layout.fillHeight: true
+            visible: flickable.contentWidth > flickable.width
+            opacity: flickable.contentX > 4 ? 1.0 : 0.35
+            contentItem: Text {
+                anchors.centerIn: parent
+                text: "◀"
+                color: "#00f0ff"
+                font.pixelSize: 9
+                font.bold: true
+            }
+            background: Rectangle {
+                color: btnScrollLeft.hovered ? "#4000f0ff" : "#1a00f0ff"
+                border.color: "#3300f0ff"
+                border.width: 1
+                radius: 2
+            }
+            onClicked: {
+                scrollAnim.to = Math.max(0, flickable.contentX - 220);
+                scrollAnim.restart();
+            }
+        }
+
         Flickable {
+            id: flickable
             Layout.fillWidth: true
             Layout.fillHeight: true
             contentWidth: buttonRow.implicitWidth
             contentHeight: height
             flickableDirection: Flickable.HorizontalFlick
             clip: true
-            boundsBehavior: Flickable.StopAtBounds
+            pressDelay: 120
+            boundsBehavior: Flickable.DragAndOvershootBounds
+            flickDeceleration: 1800
+
+            NumberAnimation {
+                id: scrollAnim
+                target: flickable
+                property: "contentX"
+                duration: 220
+                easing.type: Easing.OutCubic
+            }
+
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onWheel: function(event) {
+                    var delta = event.angleDelta.y !== 0 ? event.angleDelta.y : event.angleDelta.x;
+                    var maxScroll = Math.max(0, flickable.contentWidth - flickable.width);
+                    flickable.contentX = Math.max(0, Math.min(maxScroll, flickable.contentX - (delta * 1.5)));
+                }
+            }
 
             RowLayout {
                 id: buttonRow
-                height: parent.height
+                height: parent.height - 4
                 spacing: 5
+                anchors.top: parent.top
+                anchors.topMargin: 1
 
                 // Basemap Switcher
                 Button {
@@ -454,6 +502,48 @@ Rectangle {
                     }
                     onClicked: root.clearClicked()
                 }
+            }
+
+            ScrollBar.horizontal: ScrollBar {
+                id: hScrollBar
+                height: 3
+                anchors.bottom: parent.bottom
+                policy: flickable.contentWidth > flickable.width ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                contentItem: Rectangle {
+                    implicitHeight: 3
+                    radius: 1.5
+                    color: hScrollBar.hovered || hScrollBar.pressed ? "#00f0ff" : "#4d00f0ff"
+                }
+                background: Rectangle {
+                    color: "#1a00f0ff"
+                    radius: 1.5
+                }
+            }
+        }
+
+        // Right Navigation Scroll Chevron
+        Button {
+            id: btnScrollRight
+            Layout.preferredWidth: 20
+            Layout.fillHeight: true
+            visible: flickable.contentWidth > flickable.width
+            opacity: flickable.contentX < (flickable.contentWidth - flickable.width - 4) ? 1.0 : 0.35
+            contentItem: Text {
+                anchors.centerIn: parent
+                text: "▶"
+                color: "#00f0ff"
+                font.pixelSize: 9
+                font.bold: true
+            }
+            background: Rectangle {
+                color: btnScrollRight.hovered ? "#4000f0ff" : "#1a00f0ff"
+                border.color: "#3300f0ff"
+                border.width: 1
+                radius: 2
+            }
+            onClicked: {
+                scrollAnim.to = Math.min(flickable.contentWidth - flickable.width, flickable.contentX + 220);
+                scrollAnim.restart();
             }
         }
 
