@@ -4,7 +4,7 @@ import QtQuick.Controls
 Rectangle {
     id: root
     width: 220
-    height: collapsed ? 36 : 380
+    height: collapsed ? 36 : 415
     color: "#e6080c14"
     border.color: collapsed ? "#3300f0ff" : "#4000f0ff"
     border.width: 1
@@ -42,7 +42,7 @@ Rectangle {
                 }
 
                 Text {
-                    text: root.collapsed ? "SENSORS (7 ACTIVE)" : "TACTICAL SENSORS"
+                    text: root.collapsed ? "SENSORS (8 ACTIVE)" : "TACTICAL SENSORS"
                     color: "#00f0ff"
                     font.bold: true
                     font.pixelSize: 10
@@ -103,6 +103,7 @@ Rectangle {
                 model: [
                     { id: "flights", name: "AIR RECON (FLIGHTS)", color: "#00f0ff" },
                     { id: "vessels", name: "MARITIME AIS (SHIPS)", color: "#10b981" },
+                    { id: "satellites", name: "ORBITAL ASSETS (ISS)", color: "#ffd700" },
                     { id: "wildfires", name: "THERMAL FRONTS (FIRMS)", color: "#ff4500" },
                     { id: "earthquakes", name: "SEISMIC (USGS)", color: "#f59e0b" },
                     { id: "cameras", name: "STREET CCTV CAMS", color: "#38bdf8" },

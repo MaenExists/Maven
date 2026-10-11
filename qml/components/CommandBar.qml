@@ -15,6 +15,9 @@ Rectangle {
     property bool collapsed: false
     property bool streetViewActive: false
     property bool bordersActive: true
+    property string sensorMode: "VISUAL"
+    property bool detectionActive: false
+    property bool cockpitActive: false
 
     Behavior on height {
         NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
@@ -25,6 +28,9 @@ Rectangle {
     signal buildingsClicked()
     signal streetViewClicked()
     signal bordersClicked()
+    signal sensorOpticsClicked()
+    signal detectionMeshClicked()
+    signal cockpitClicked()
     signal tiltClicked()
     signal northClicked()
     signal zoomInClicked()
@@ -258,6 +264,88 @@ Rectangle {
                         radius: 2
                     }
                     onClicked: root.bordersClicked()
+                }
+
+                // Tactical Sensor Optics Mode (VISUAL / NVG / FLIR / CRT / NOIR)
+                Button {
+                    id: btnOptics
+                    Layout.fillHeight: true
+                    contentItem: Row {
+                        spacing: 5
+                        anchors.centerIn: parent
+                        Text {
+                            text: root.sensorMode === "NVG" ? "🟢" : (root.sensorMode === "FLIR" ? "🔥" : (root.sensorMode === "CRT" ? "📺" : (root.sensorMode === "NOIR" ? "⚪" : "👁️")))
+                            font.pixelSize: 11
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Text {
+                            text: "OPTICS: " + root.sensorMode
+                            color: root.sensorMode === "VISUAL" ? "#00f0ff" : (root.sensorMode === "NVG" ? "#10b981" : (root.sensorMode === "FLIR" ? "#ff5500" : "#a855f7"))
+                            font.bold: true
+                            font.pixelSize: 10
+                            font.family: "Monospace"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    background: Rectangle {
+                        color: root.sensorMode !== "VISUAL" ? "#3300f0ff" : (btnOptics.hovered ? "#33ffffff" : "#0dffffff")
+                        border.color: root.sensorMode !== "VISUAL" ? "#00f0ff" : "#4000f0ff"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.sensorOpticsClicked()
+                }
+
+                // AI ATR Detection Mesh Overlay [D]
+                Button {
+                    id: btnDetection
+                    Layout.fillHeight: true
+                    contentItem: Row {
+                        spacing: 5
+                        anchors.centerIn: parent
+                        Text { text: "🎯"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            text: root.detectionActive ? "ATR MESH [ON]" : "ATR MESH [D]"
+                            color: root.detectionActive ? "#10b981" : "#e2e8f0"
+                            font.bold: true
+                            font.pixelSize: 10
+                            font.family: "Monospace"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    background: Rectangle {
+                        color: root.detectionActive ? "#3310b981" : (btnDetection.hovered ? "#33ffffff" : "#0dffffff")
+                        border.color: root.detectionActive ? "#10b981" : "#4000f0ff"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.detectionMeshClicked()
+                }
+
+                // Cockpit Chase-Cam Mode [C]
+                Button {
+                    id: btnCockpit
+                    Layout.fillHeight: true
+                    contentItem: Row {
+                        spacing: 5
+                        anchors.centerIn: parent
+                        Text { text: "✈️"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            text: root.cockpitActive ? "CHASE [ON]" : "CHASE [C]"
+                            color: root.cockpitActive ? "#10b981" : "#e2e8f0"
+                            font.bold: true
+                            font.pixelSize: 10
+                            font.family: "Monospace"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    background: Rectangle {
+                        color: root.cockpitActive ? "#3310b981" : (btnCockpit.hovered ? "#33ffffff" : "#0dffffff")
+                        border.color: root.cockpitActive ? "#10b981" : "#4000f0ff"
+                        border.width: 1
+                        radius: 2
+                    }
+                    onClicked: root.cockpitClicked()
                 }
 
                 // 3D Perspective Tilt

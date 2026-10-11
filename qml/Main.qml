@@ -79,6 +79,25 @@ Window {
         onActivated: commandBar.zoomOutClicked()
     }
 
+    Shortcut {
+        sequence: "C"
+        onActivated: commandBar.cockpitClicked()
+    }
+
+    Shortcut {
+        sequence: "D"
+        onActivated: commandBar.detectionMeshClicked()
+    }
+
+    Shortcut {
+        sequence: "Esc"
+        onActivated: {
+            if (cockpitHud.active) {
+                cockpitHud.exitRequested();
+            }
+        }
+    }
+
     // Top Header Banner
     HeaderBar {
         id: headerBar
@@ -137,6 +156,24 @@ Window {
         onBordersClicked: {
             globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.toggleBorders(); }", function(res) {
                 commandBar.bordersActive = Boolean(res);
+            });
+        }
+
+        onSensorOpticsClicked: {
+            globeWebEngine.runJavaScript("if (window.mavenApp && window.mavenApp.sensorOptics) { window.mavenApp.sensorOptics.cycleMode(); }", function(res) {
+                if (res) commandBar.sensorMode = res;
+            });
+        }
+
+        onDetectionMeshClicked: {
+            globeWebEngine.runJavaScript("if (window.mavenApp && window.mavenApp.detectionMesh) { window.mavenApp.detectionMesh.toggle(); }", function(res) {
+                commandBar.detectionActive = Boolean(res);
+            });
+        }
+
+        onCockpitClicked: {
+            globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.toggleCockpitMode(); }", function(res) {
+                commandBar.cockpitActive = Boolean(res);
             });
         }
 
@@ -245,6 +282,16 @@ Window {
         onFlyToRequested: function(lon, lat, height) {
             globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.flyTo(" + lon + ", " + lat + ", " + height + "); }");
         }
+
+        onCockpitRequested: function(entityId) {
+            globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.enterCockpitMode('" + entityId + "'); }", function(res) {
+                commandBar.cockpitActive = true;
+            });
+        }
+
+        onHandoffCctvRequested: function(lat, lon) {
+            globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.swoopToNearestCCTV(" + lat + ", " + lon + "); }");
+        }
     }
 
     // Bottom Telemetry Coordinates & Altitude Bar
@@ -264,6 +311,19 @@ Window {
 
         onFlyToStreetRequested: function(lat, lon) {
             globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.flyTo(" + lon + ", " + lat + ", 400, -20, 0); }");
+        }
+    }
+
+    // Tactical Fighter-Style Cockpit HUD Overlay
+    CockpitHUD {
+        id: cockpitHud
+        anchors.fill: parent
+        z: 250
+
+        onExitRequested: {
+            globeWebEngine.runJavaScript("if (window.mavenApp) { window.mavenApp.exitCockpitMode(); }");
+            cockpitHud.active = false;
+            commandBar.cockpitActive = false;
         }
     }
 
@@ -319,6 +379,23 @@ Window {
         function onAlertTriggered(alertId, alertTitle, jsonStr) {
             alertBanner.alertTitle = alertTitle;
             alertBanner.visible = true;
+        }
+
+        function onCockpitTelemetryUpdated(jsonStr) {
+            try {
+                var data = JSON.parse(jsonStr);
+                cockpitHud.active = Boolean(data.active);
+                commandBar.cockpitActive = Boolean(data.active);
+                if (data.active) {
+                    cockpitHud.targetId = data.id || "";
+                    cockpitHud.callsign = data.callsign || "TARGET";
+                    cockpitHud.altitudeFt = data.altitude_ft || 0;
+                    cockpitHud.speedKnots = data.speed_knots || 0;
+                    cockpitHud.headingDeg = data.heading_deg || 0;
+                }
+            } catch (e) {
+                console.error("Error parsing cockpit telemetry JSON:", e);
+            }
         }
     }
 }

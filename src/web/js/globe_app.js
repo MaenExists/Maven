@@ -104,7 +104,15 @@ class MavenGlobeApp {
         this.changeViewer = new SatelliteChangeViewer(this.viewer);
         this.weatherLayer = new WeatherSimulationLayer(this.viewer);
         this.countries = new CountriesLayerManager(this.viewer);
+        this.sensorOptics = new TacticalSensorOptics(this.viewer);
+        this.detectionMesh = new TacticalDetectionMesh(this.viewer);
         this.streetViewMode = false;
+        this.cockpitActive = false;
+        this.cockpitTarget = null;
+        this.cockpitListener = null;
+
+        // Bind global tactical keyboard shortcuts
+        this._bindGlobalHotkeys();
 
         // Bind camera telemetry readout
         this._bindTelemetryReadout();
@@ -247,7 +255,7 @@ class MavenGlobeApp {
     async startDataPolling() {
         const fetchAll = async () => {
             try {
-                const [flightsRes, vesselsRes, firesRes, quakesRes, camsRes, confRes, weatherRes, anomRes] = await Promise.all([
+                const [flightsRes, vesselsRes, firesRes, quakesRes, camsRes, confRes, weatherRes, anomRes, satsRes] = await Promise.all([
                     fetch('/api/flights').then(r => r.json()).catch(() => ({ data: [] })),
                     fetch('/api/vessels').then(r => r.json()).catch(() => ({ data: [] })),
                     fetch('/api/wildfires').then(r => r.json()).catch(() => ({ data: [] })),
@@ -256,6 +264,7 @@ class MavenGlobeApp {
                     fetch('/api/conflicts').then(r => r.json()).catch(() => ({ data: [] })),
                     fetch('/api/weather').then(r => r.json()).catch(() => ({ data: [] })),
                     fetch('/api/anomalies').then(r => r.json()).catch(() => ({ data: [] })),
+                    fetch('/api/satellites').then(r => r.json()).catch(() => ({ data: [] })),
                 ]);
 
                 if (flightsRes.data) this.layers.updateFlights(flightsRes.data);
@@ -266,6 +275,7 @@ class MavenGlobeApp {
                 if (confRes.data) this.layers.updateConflicts(confRes.data);
                 if (weatherRes.data) this.weatherLayer.updateWeatherGrid(weatherRes.data);
                 if (anomRes.data) this.layers.updateAnomalies(anomRes.data);
+                if (satsRes.data) this.layers.updateSatellites(satsRes.data);
 
                 this._updateCounters({
                     flights: flightsRes.count || 0,
@@ -273,7 +283,8 @@ class MavenGlobeApp {
                     fires: firesRes.count || 0,
                     quakes: quakesRes.count || 0,
                     cameras: camsRes.count || 0,
-                    anomalies: anomRes.count || 0
+                    anomalies: anomRes.count || 0,
+                    satellites: satsRes.count || 0
                 });
             } catch (e) {
                 console.warn('Telemetry polling error:', e);
@@ -282,6 +293,142 @@ class MavenGlobeApp {
 
         await fetchAll();
         setInterval(fetchAll, 12000);
+    }
+
+    _bindGlobalHotkeys() {
+        window.addEventListener('keydown', (e) => {
+            if (['input', 'textarea'].includes(document.activeElement.tagName.toLowerCase())) return;
+
+            // Hotkeys 1-5 for Tactical Sensor Optics
+            if (e.key === '1') this.sensorOptics.setMode('VISUAL');
+            else if (e.key === '2') this.sensorOptics.setMode('NVG');
+            else if (e.key === '3') this.sensorOptics.setMode('FLIR');
+            else if (e.key === '4') this.sensorOptics.setMode('CRT');
+            else if (e.key === '5') this.sensorOptics.setMode('NOIR');
+            // 'c' or 'C' for Cockpit Chase-Cam
+            else if (e.key === 'c' || e.key === 'C') this.toggleCockpitMode();
+            // 'Escape' to disengage Cockpit
+            else if (e.key === 'Escape') this.exitCockpitMode();
+        });
+    }
+
+    enterCockpitMode(entityId) {
+        let target = null;
+        if (entityId && this.layers.flightSource) {
+            target = this.layers.flightSource.entities.getById(entityId);
+        }
+        if (!target && this.layers.flightSource) {
+            const flights = this.layers.flightSource.entities.values;
+            if (flights.length > 0) target = flights[0];
+        }
+        if (!target) return;
+
+        this.cockpitTarget = target;
+        this.cockpitActive = true;
+        if (window.tacticalSound) window.tacticalSound.playTargetLock();
+
+        if (this.cockpitListener) {
+            this.cockpitListener();
+            this.cockpitListener = null;
+        }
+
+        // Attach preUpdate camera follower
+        this.cockpitListener = this.viewer.scene.preUpdate.addEventListener((scene, time) => {
+            if (!this.cockpitTarget || !this.cockpitActive) return;
+            const pos = this.cockpitTarget.position.getValue(time);
+            if (!pos) return;
+
+            const props = this.cockpitTarget.properties || {};
+            const headingDeg = props.heading ? (props.heading.getValue() || 0) : 0;
+            const headingRad = Cesium.Math.toRadians(headingDeg);
+
+            const carto = Cesium.Cartographic.fromCartesian(pos);
+            const cameraDistance = 240.0;
+            const offsetLat = (cameraDistance * Math.cos(headingRad + Math.PI)) / 111320.0;
+            const offsetLon = (cameraDistance * Math.sin(headingRad + Math.PI)) / (111320.0 * Math.cos(carto.latitude));
+
+            const camPos = Cesium.Cartesian3.fromRadians(
+                carto.longitude + offsetLon,
+                carto.latitude + offsetLat,
+                carto.height + 36.0
+            );
+
+            this.viewer.camera.setView({
+                destination: camPos,
+                orientation: {
+                    heading: headingRad,
+                    pitch: Cesium.Math.toRadians(-6.5),
+                    roll: 0.0
+                }
+            });
+
+            if (window.mavenBridge) {
+                const altFt = Math.round(carto.height * 3.28084);
+                const spdKnots = props.velocity_mps ? Math.round(props.velocity_mps.getValue() * 1.94384) : 460;
+                window.mavenBridge.notifyCockpitTelemetry(JSON.stringify({
+                    active: true,
+                    id: this.cockpitTarget.id,
+                    callsign: props.callsign ? props.callsign.getValue() : 'TARGET',
+                    altitude_ft: altFt,
+                    speed_knots: spdKnots,
+                    heading_deg: Math.round(headingDeg)
+                }));
+            }
+        });
+    }
+
+    exitCockpitMode() {
+        if (!this.cockpitActive) return;
+        this.cockpitActive = false;
+        if (this.cockpitListener) {
+            this.cockpitListener();
+            this.cockpitListener = null;
+        }
+        this.cockpitTarget = null;
+
+        if (window.mavenBridge) {
+            window.mavenBridge.notifyCockpitTelemetry(JSON.stringify({ active: false }));
+        }
+
+        this.viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(30.0, 20.0, 14000000.0),
+            duration: 1.6
+        });
+    }
+
+    toggleCockpitMode(entityId) {
+        if (this.cockpitActive) {
+            this.exitCockpitMode();
+            return false;
+        } else {
+            this.enterCockpitMode(entityId);
+            return true;
+        }
+    }
+
+    async swoopToNearestCCTV(lat, lon) {
+        try {
+            const resp = await fetch(`/api/intel/dossier?lat=${lat}&lon=${lon}&name=Sector`);
+            const dossier = await resp.json();
+            if (dossier.cameras && dossier.cameras.length > 0) {
+                const cam = dossier.cameras[0];
+                if (window.tacticalSound) window.tacticalSound.playTargetLock();
+                this.viewer.camera.flyTo({
+                    destination: Cesium.Cartesian3.fromDegrees(cam.longitude, cam.latitude, 450),
+                    orientation: {
+                        heading: Cesium.Math.toRadians(0),
+                        pitch: Cesium.Math.toRadians(-22),
+                        roll: 0.0
+                    },
+                    duration: 2.0
+                });
+                if (window.mavenBridge) {
+                    window.mavenBridge.notifyEntitySelected('live_cam', cam.id, JSON.stringify(cam));
+                }
+            }
+        } catch (e) {
+            console.warn('Swoop to nearest CCTV failed:', e);
+        }
     }
 
     _updateCounters(counts) {

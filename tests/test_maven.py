@@ -16,6 +16,7 @@ from src.collectors.conflicts import ConflictCollector
 from src.collectors.earthquakes import EarthquakeCollector
 from src.collectors.flights import FlightCollector
 from src.collectors.maritime import MaritimeCollector
+from src.collectors.satellites import SatelliteCollector
 from src.collectors.weather import WeatherCollector
 from src.collectors.wildfires import WildfireCollector
 from src.server.local_server import TacticalServer
@@ -67,6 +68,11 @@ class TestCollectorsAndEngines(unittest.TestCase):
         conflicts = ConflictCollector().fetch_live_incidents()
         self.assertGreater(len(conflicts), 0)
 
+        satellites = SatelliteCollector().fetch_live_satellites()
+        self.assertGreater(len(satellites), 0)
+        self.assertIn("latitude", satellites[0])
+        self.assertIn("longitude", satellites[0])
+
     def test_anomaly_detection(self):
         engine = AnomalyEngine()
         # Simulated emergency squawk flight
@@ -110,6 +116,12 @@ class TestLocalTacticalServer(unittest.TestCase):
             f_data = json.loads(r.read().decode())
             self.assertIn("data", f_data)
             self.assertGreater(f_data["count"], 0)
+
+        satellites_url = "http://127.0.0.1:9876/api/satellites"
+        with urllib.request.urlopen(satellites_url, timeout=5) as r:
+            sat_data = json.loads(r.read().decode())
+            self.assertIn("data", sat_data)
+            self.assertGreater(sat_data["count"], 0)
 
     def test_search_and_dossier_endpoints(self):
         search_url = "http://127.0.0.1:9876/api/search?q=Tokyo"

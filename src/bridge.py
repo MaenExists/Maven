@@ -5,7 +5,7 @@ Facilitates bi-directional communication between PySide6, QML HUD, and CesiumJS 
 
 import json
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from PySide6.QtCore import QObject, Signal, Slot
 
@@ -24,6 +24,7 @@ class MavenBridge(QObject):
     statsUpdated = Signal(int, int, int, int, int)  # flights, vessels, fires, quakes, cams
     changeDetectionTriggered = Signal(str)  # preset_id
     measureModeActivated = Signal(str)  # mode: "distance", "area", "off"
+    cockpitTelemetryUpdated = Signal(str)  # json_payload: active, id, callsign, altitude_ft, speed_knots, heading_deg
 
     def __init__(self, parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
@@ -68,3 +69,8 @@ class MavenBridge(QObject):
         """Called to activate interactive ruler (distance/area/none)."""
         logger.info("Set measurement mode: %s", mode)
         self.measureModeActivated.emit(mode)
+
+    @Slot(str)
+    def notifyCockpitTelemetry(self, json_str: str) -> None:
+        """Called from Cesium globe during Cockpit chase cam mode."""
+        self.cockpitTelemetryUpdated.emit(json_str)

@@ -23,6 +23,7 @@ from src.collectors.conflicts import ConflictCollector
 from src.collectors.earthquakes import EarthquakeCollector
 from src.collectors.flights import FlightCollector
 from src.collectors.maritime import MaritimeCollector
+from src.collectors.satellites import SatelliteCollector
 from src.collectors.weather import WeatherCollector
 from src.collectors.wildfires import WildfireCollector
 from src.config import CONFIG
@@ -163,6 +164,12 @@ class TacticalAPIHandler(SimpleHTTPRequestHandler):
                 "data": srv.anomalies,
             })
 
+        elif path == "/api/satellites":
+            self._send_json({
+                "count": len(srv.satellites),
+                "data": srv.satellites,
+            })
+
         elif path == "/api/change-detection/presets":
             self._send_json(srv.change_engine.list_presets())
 
@@ -269,6 +276,7 @@ class TacticalServer:
         self.camera_collector = CameraCollector()
         self.conflict_collector = ConflictCollector()
         self.weather_collector = WeatherCollector()
+        self.satellite_collector = SatelliteCollector()
 
         # Engines
         self.geofence_mgr = GeofenceManager()
@@ -283,6 +291,7 @@ class TacticalServer:
         self.cameras = []
         self.conflicts = []
         self.weather_grid = []
+        self.satellites = []
         self.anomalies = []
 
         # Search and Intelligence Dossier Cache
@@ -342,6 +351,7 @@ class TacticalServer:
             {"name": h["name"], "latitude": h["lat"], "longitude": h["lon"], "temperature_c": 20.0, "wind_speed_kmh": 15.0, "wind_direction_deg": 180.0}
             for h in self.weather_collector.HUBS
         ]
+        self.satellites = self.satellite_collector.fetch_live_satellites()
 
         # Start live background polling thread
         self.poll_thread = threading.Thread(target=self._background_poll_loop, daemon=True)
@@ -365,6 +375,7 @@ class TacticalServer:
             self.cameras = self.camera_collector.fetch_live_cameras()
             self.conflicts = self.conflict_collector.fetch_live_incidents()
             self.weather_grid = self.weather_collector.fetch_global_weather_grid()
+            self.satellites = self.satellite_collector.fetch_live_satellites()
 
             # Evaluate geofence breaches
             all_entities = self.flights + self.vessels

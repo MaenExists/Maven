@@ -16,6 +16,7 @@ class TacticalLayersManager {
         this.cameraSource = new Cesium.CustomDataSource('cameras');
         this.conflictSource = new Cesium.CustomDataSource('conflicts');
         this.anomalySource = new Cesium.CustomDataSource('anomalies');
+        this.satelliteSource = new Cesium.CustomDataSource('satellites');
 
         // Texture Cache to prevent GC pauses
         this.iconCache = new Map();
@@ -28,7 +29,8 @@ class TacticalLayersManager {
             earthquakes: true,
             cameras: true,
             conflicts: true,
-            anomalies: true
+            anomalies: true,
+            satellites: true
         };
 
         this._initDataSources();
@@ -44,6 +46,7 @@ class TacticalLayersManager {
         this.viewer.dataSources.add(this.cameraSource);
         this.viewer.dataSources.add(this.conflictSource);
         this.viewer.dataSources.add(this.anomalySource);
+        this.viewer.dataSources.add(this.satelliteSource);
     }
 
     _initClustering() {
@@ -412,6 +415,81 @@ class TacticalLayersManager {
         });
     }
 
+    _getSatelliteIcon() {
+        const key = 'sat_icon';
+        if (this.iconCache.has(key)) return this.iconCache.get(key);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 34;
+        canvas.height = 34;
+        const ctx = canvas.getContext('2d');
+
+        // Central satellite craft core
+        ctx.fillStyle = '#060c18';
+        ctx.fillRect(12, 12, 10, 10);
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#ffd700';
+        ctx.strokeRect(12, 12, 10, 10);
+
+        // Solar panels (left & right wings)
+        ctx.fillStyle = 'rgba(0, 240, 255, 0.9)';
+        ctx.fillRect(2, 13, 8, 8);
+        ctx.fillRect(24, 13, 8, 8);
+        ctx.strokeStyle = '#00f0ff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(2, 13, 8, 8);
+        ctx.strokeRect(24, 13, 8, 8);
+
+        // Communications dish antenna
+        ctx.beginPath();
+        ctx.arc(17, 7, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffd700';
+        ctx.fill();
+        ctx.moveTo(17, 10);
+        ctx.lineTo(17, 12);
+        ctx.strokeStyle = '#ffd700';
+        ctx.stroke();
+
+        this.iconCache.set(key, canvas);
+        return canvas;
+    }
+
+    updateSatellites(satellites) {
+        if (!this.visibility.satellites || !satellites) return;
+        this.satelliteSource.entities.removeAll();
+
+        satellites.forEach(sat => {
+            const alt = sat.altitude_m || 418000;
+            const pos = Cesium.Cartesian3.fromDegrees(sat.longitude, sat.latitude, alt);
+
+            // 1. Orbital asset marker
+            this.satelliteSource.entities.add({
+                id: sat.id,
+                position: pos,
+                billboard: {
+                    image: this._getSatelliteIcon(),
+                    scale: 1.0,
+                    verticalOrigin: Cesium.VerticalOrigin.CENTER,
+                    heightReference: Cesium.HeightReference.NONE
+                },
+                properties: sat
+            });
+
+            // 2. Orbital trajectory ribbon
+            if (sat.orbit_track && sat.orbit_track.length > 1) {
+                const positions = sat.orbit_track.map(pt => Cesium.Cartesian3.fromDegrees(pt[0], pt[1], alt));
+                this.satelliteSource.entities.add({
+                    id: `${sat.id}_track`,
+                    polyline: {
+                        positions: positions,
+                        width: 1.5,
+                        material: Cesium.Color.fromCssColorString('#ffd700').withAlpha(0.35)
+                    }
+                });
+            }
+        });
+    }
+
     toggleLayer(layerId, isVisible) {
         this.visibility[layerId] = isVisible;
         const sourceMap = {
@@ -421,7 +499,8 @@ class TacticalLayersManager {
             earthquakes: this.quakeSource,
             cameras: this.cameraSource,
             conflicts: this.conflictSource,
-            anomalies: this.anomalySource
+            anomalies: this.anomalySource,
+            satellites: this.satelliteSource
         };
         if (sourceMap[layerId]) {
             sourceMap[layerId].show = isVisible;
@@ -541,6 +620,11 @@ class TacticalLayersManager {
                             header = '🌦️ ATMOSPHERIC TELEMETRY';
                             title = props.title || props.name;
                             meta = props.details || `${props.temperature_c}°C`;
+                        } else if (entType === 'satellite') {
+                            header = '🛰️ ORBITAL RECONNAISSANCE';
+                            title = props.name || 'SPACE ASSET';
+                            meta = `ALT: ${Math.round((props.altitude_m || 418000) / 1000)} KM | VEL: ${props.speed_kmh || 27600} KM/H`;
+                            hint = '▶ CLICK TO LOCK ORBITAL VANTAGE';
                         }
 
                         tooltip.innerHTML = `

@@ -4,7 +4,7 @@ import QtQuick.Controls
 Rectangle {
     id: root
     width: 280
-    height: collapsed ? 36 : 320
+    height: collapsed ? 36 : (root.entityData.type === 'flight' ? 395 : 360)
     color: "#e6080c14"
     border.color: "#00f0ff"
     border.width: 1
@@ -15,6 +15,8 @@ Rectangle {
     property var entityData: ({})
     property bool collapsed: false
     signal flyToRequested(real lon, real lat, real height)
+    signal cockpitRequested(string entityId)
+    signal handoffCctvRequested(real lat, real lon)
     signal closed()
 
     Behavior on height {
@@ -225,10 +227,10 @@ Rectangle {
                 }
             }
 
-            // Action Button
+            // Intercept Action Button
             Rectangle {
                 width: parent.width
-                height: 30
+                height: 28
                 color: btnIntercept.containsMouse ? "#4000f0ff" : "#1a00f0ff"
                 border.color: "#00f0ff"
                 border.width: 1
@@ -251,6 +253,68 @@ Rectangle {
                     onClicked: {
                         if (root.entityData.longitude && root.entityData.latitude) {
                             root.flyToRequested(root.entityData.longitude, root.entityData.latitude, 25000.0);
+                        }
+                    }
+                }
+            }
+
+            // Cockpit Chase-Cam Button (Flights only)
+            Rectangle {
+                width: parent.width
+                height: 28
+                visible: root.entityData.type === "flight"
+                color: btnCockpit.containsMouse ? "#4010b981" : "#1a10b981"
+                border.color: "#10b981"
+                border.width: 1
+                radius: 2
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "✈️ ENGAGE COCKPIT CHASE [C]"
+                    color: "#10b981"
+                    font.bold: true
+                    font.pixelSize: 10
+                    font.family: "Monospace"
+                }
+
+                MouseArea {
+                    id: btnCockpit
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        root.cockpitRequested(root.entityData.id);
+                    }
+                }
+            }
+
+            // Sensor Handoff to Nearest CCTV Button
+            Rectangle {
+                width: parent.width
+                height: 28
+                visible: Boolean(root.entityData.latitude && root.entityData.longitude)
+                color: btnHandoff.containsMouse ? "#40f59e0b" : "#1af59e0b"
+                border.color: "#f59e0b"
+                border.width: 1
+                radius: 2
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "📹 HANDOFF TO CLOSEST CCTV"
+                    color: "#f59e0b"
+                    font.bold: true
+                    font.pixelSize: 10
+                    font.family: "Monospace"
+                }
+
+                MouseArea {
+                    id: btnHandoff
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (root.entityData.latitude && root.entityData.longitude) {
+                            root.handoffCctvRequested(root.entityData.latitude, root.entityData.longitude);
                         }
                     }
                 }
