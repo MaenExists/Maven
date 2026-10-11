@@ -6,6 +6,8 @@
  * - FLIR (Forward Looking Infrared - Ironbow thermography heat mapping)
  * - CRT (Tactical C2 Command Display - chromatic aberration, raster scanlines)
  * - NOIR (High-contrast monochromatic orbital reconnaissance)
+ *
+ * Fully compatible with WebGL 2.0 (GLSL 300 es) and WebGL 1.0 fallbacks in CesiumJS.
  */
 
 class TacticalSensorOptics {
@@ -14,20 +16,39 @@ class TacticalSensorOptics {
         this.currentMode = 'VISUAL';
         this.stages = {};
 
+        this._suppressErrorModal();
         this._initStages();
+    }
+
+    _suppressErrorModal() {
+        if (this.viewer && this.viewer.cesiumWidget) {
+            this.viewer.cesiumWidget.showErrorPanel = (title, message, error) => {
+                console.warn('Cesium WebGL Render Notice:', title, message, error);
+            };
+        }
+        if (this.viewer && this.viewer.scene && this.viewer.scene.renderError) {
+            this.viewer.scene.renderError.addEventListener((scene, error) => {
+                console.warn('Cesium render error intercepted:', error);
+            });
+        }
     }
 
     _initStages() {
         const scene = this.viewer.scene;
         if (!scene || !scene.postProcessStages) return;
 
+        const isWebGL2 = Boolean(scene.context && scene.context.webgl2);
+        const inKeyword = isWebGL2 ? 'in' : 'varying';
+        const texFunc = isWebGL2 ? 'texture' : 'texture2D';
+        const outVar = isWebGL2 ? 'out_FragColor' : 'gl_FragColor';
+
         // 1. NVG Stage (Night Vision Goggles)
         const nvgShader = `
             uniform sampler2D colorTexture;
-            varying vec2 v_textureCoordinates;
+            ${inKeyword} vec2 v_textureCoordinates;
 
             void main() {
-                vec4 color = texture2D(colorTexture, v_textureCoordinates);
+                vec4 color = ${texFunc}(colorTexture, v_textureCoordinates);
                 vec2 uv = v_textureCoordinates;
 
                 // Luminance calculation
@@ -45,22 +66,22 @@ class TacticalSensorOptics {
                 vec3 nvg = vec3(0.06, lum * 1.48, 0.16) + scanline;
                 nvg *= vignette;
 
-                gl_FragColor = vec4(nvg, color.a);
+                ${outVar} = vec4(nvg, color.a);
             }
         `;
 
         // 2. FLIR Stage (Forward Looking Infrared / Ironbow Thermal)
         const flirShader = `
             uniform sampler2D colorTexture;
-            varying vec2 v_textureCoordinates;
+            ${inKeyword} vec2 v_textureCoordinates;
 
             vec3 flirPalette(float t) {
                 t = clamp(t, 0.0, 1.0);
-                vec3 c1 = vec3(0.05, 0.05, 0.25); // Deep cold navy
-                vec3 c2 = vec3(0.55, 0.05, 0.65); // Thermal magenta
-                vec3 c3 = vec3(0.95, 0.35, 0.05); // Hot orange
-                vec3 c4 = vec3(1.00, 0.95, 0.20); // Hot yellow
-                vec3 c5 = vec3(1.00, 1.00, 1.00); // White-hot core
+                vec3 c1 = vec3(0.05, 0.05, 0.25);
+                vec3 c2 = vec3(0.55, 0.05, 0.65);
+                vec3 c3 = vec3(0.95, 0.35, 0.05);
+                vec3 c4 = vec3(1.00, 0.95, 0.20);
+                vec3 c5 = vec3(1.00, 1.00, 1.00);
                 
                 if (t < 0.25) return mix(c1, c2, t * 4.0);
                 if (t < 0.50) return mix(c2, c3, (t - 0.25) * 4.0);
@@ -69,30 +90,30 @@ class TacticalSensorOptics {
             }
 
             void main() {
-                vec4 color = texture2D(colorTexture, v_textureCoordinates);
+                vec4 color = ${texFunc}(colorTexture, v_textureCoordinates);
                 float lum = dot(color.rgb, vec3(0.299, 0.587, 0.114));
 
                 // Dynamic thermal curve emphasizing heat signatures
                 float heat = pow(lum, 1.22);
                 vec3 thermal = flirPalette(heat);
 
-                gl_FragColor = vec4(thermal, color.a);
+                ${outVar} = vec4(thermal, color.a);
             }
         `;
 
         // 3. CRT Stage (Surveillance / Tactical Command C2 Display)
         const crtShader = `
             uniform sampler2D colorTexture;
-            varying vec2 v_textureCoordinates;
+            ${inKeyword} vec2 v_textureCoordinates;
 
             void main() {
                 vec2 uv = v_textureCoordinates;
 
                 // Chromatic aberration (RGB channel divergence)
                 vec2 shift = vec2(0.0016, 0.0);
-                float r = texture2D(colorTexture, uv - shift).r;
-                float g = texture2D(colorTexture, uv).g;
-                float b = texture2D(colorTexture, uv + shift).b;
+                float r = ${texFunc}(colorTexture, uv - shift).r;
+                float g = ${texFunc}(colorTexture, uv).g;
+                float b = ${texFunc}(colorTexture, uv + shift).b;
                 vec3 col = vec3(r, g, b);
 
                 // Horizontal scanline grid
@@ -102,24 +123,24 @@ class TacticalSensorOptics {
                 // Tactical phosphor grading
                 col = mix(col, vec3(col.r * 1.08, col.g * 1.04, col.b * 0.92), 0.35);
 
-                gl_FragColor = vec4(col, 1.0);
+                ${outVar} = vec4(col, 1.0);
             }
         `;
 
         // 4. NOIR Stage (Reconnaissance Monochromatic High-Contrast)
         const noirShader = `
             uniform sampler2D colorTexture;
-            varying vec2 v_textureCoordinates;
+            ${inKeyword} vec2 v_textureCoordinates;
 
             void main() {
-                vec4 color = texture2D(colorTexture, v_textureCoordinates);
+                vec4 color = ${texFunc}(colorTexture, v_textureCoordinates);
                 float lum = dot(color.rgb, vec3(0.299, 0.587, 0.114));
 
                 // High-pass contrast curve
                 float highContrast = smoothstep(0.10, 0.88, lum);
                 vec3 noir = vec3(highContrast);
 
-                gl_FragColor = vec4(noir, color.a);
+                ${outVar} = vec4(noir, color.a);
             }
         `;
 
@@ -152,7 +173,7 @@ class TacticalSensorOptics {
             this.stages['NOIR'].enabled = false;
             scene.postProcessStages.add(this.stages['NOIR']);
 
-            console.log('Tactical Sensor Optics post-processing stages initialized.');
+            console.log('Tactical Sensor Optics post-processing stages initialized (WebGL2:', isWebGL2, ')');
         } catch (e) {
             console.warn('Failed to initialize PostProcessStages:', e);
         }
@@ -162,21 +183,29 @@ class TacticalSensorOptics {
         mode = (mode || 'VISUAL').toUpperCase();
         this.currentMode = mode;
 
-        // Disable all stages first
-        Object.keys(this.stages).forEach(k => {
-            if (this.stages[k]) this.stages[k].enabled = false;
-        });
+        try {
+            // Disable all stages first
+            Object.keys(this.stages).forEach(k => {
+                if (this.stages[k]) this.stages[k].enabled = false;
+            });
 
-        // Enable target stage if not default visual
-        if (this.stages[mode]) {
-            this.stages[mode].enabled = true;
+            // Enable target stage if not default visual
+            if (this.stages[mode]) {
+                this.stages[mode].enabled = true;
+            }
+
+            if (window.tacticalSound) {
+                window.tacticalSound.playClick();
+            }
+
+            console.log(`Sensor optics switched to: ${mode}`);
+        } catch (e) {
+            console.error(`Failed to activate sensor mode ${mode}:`, e);
+            this.currentMode = 'VISUAL';
+            Object.keys(this.stages).forEach(k => {
+                if (this.stages[k]) this.stages[k].enabled = false;
+            });
         }
-
-        if (window.tacticalSound) {
-            window.tacticalSound.playClick();
-        }
-
-        console.log(`Sensor optics switched to: ${mode}`);
         return this.currentMode;
     }
 
