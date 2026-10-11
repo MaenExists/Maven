@@ -105,42 +105,38 @@ class TacticalAPIHandler(SimpleHTTPRequestHandler):
             self._send_json({
                 "count": len(srv.flights),
                 "data": srv.flights,
-                "geojson": srv._to_geojson(srv.flights),
             })
 
         elif path == "/api/vessels":
             self._send_json({
                 "count": len(srv.vessels),
                 "data": srv.vessels,
-                "geojson": srv._to_geojson(srv.vessels),
             })
 
         elif path == "/api/wildfires":
             self._send_json({
                 "count": len(srv.wildfires),
                 "data": srv.wildfires,
-                "geojson": srv._to_geojson(srv.wildfires),
             })
 
         elif path == "/api/earthquakes":
             self._send_json({
                 "count": len(srv.earthquakes),
                 "data": srv.earthquakes,
-                "geojson": srv._to_geojson(srv.earthquakes),
             })
 
         elif path == "/api/cameras":
+            limit = query.get("limit", [None])[0]
+            cam_data = srv.cameras[:int(limit)] if limit else srv.cameras
             self._send_json({
                 "count": len(srv.cameras),
-                "data": srv.cameras,
-                "geojson": srv._to_geojson(srv.cameras),
+                "data": cam_data,
             })
 
         elif path == "/api/conflicts":
             self._send_json({
                 "count": len(srv.conflicts),
                 "data": srv.conflicts,
-                "geojson": srv._to_geojson(srv.conflicts),
             })
 
         elif path == "/api/weather":

@@ -220,10 +220,11 @@ class TacticalLayersManager {
         return canvas;
     }
 
-    // In-place updates to avoid garbage collection hitches
+    // In-place updates with batched events and stale entity pruning
     updateFlights(flights) {
         if (!this.visibility.flights) return;
         const activeIds = new Set();
+        this.flightSource.entities.suspendEvents();
 
         flights.forEach(f => {
             activeIds.add(f.id);
@@ -248,12 +249,24 @@ class TacticalLayersManager {
                 });
             }
         });
+
+        // Prune stale flights that departed or landed
+        const currentFlights = this.flightSource.entities.values;
+        for (let i = currentFlights.length - 1; i >= 0; i--) {
+            if (!activeIds.has(currentFlights[i].id)) {
+                this.flightSource.entities.remove(currentFlights[i]);
+            }
+        }
+        this.flightSource.entities.resumeEvents();
     }
 
     updateVessels(vessels) {
         if (!this.visibility.vessels) return;
+        const activeIds = new Set();
+        this.vesselSource.entities.suspendEvents();
 
         vessels.forEach(v => {
+            activeIds.add(v.id);
             const pos = Cesium.Cartesian3.fromDegrees(v.longitude, v.latitude, 5);
             const existing = this.vesselSource.entities.getById(v.id);
 
@@ -274,6 +287,15 @@ class TacticalLayersManager {
                 });
             }
         });
+
+        // Prune stale vessels
+        const currentVessels = this.vesselSource.entities.values;
+        for (let i = currentVessels.length - 1; i >= 0; i--) {
+            if (!activeIds.has(currentVessels[i].id)) {
+                this.vesselSource.entities.remove(currentVessels[i]);
+            }
+        }
+        this.vesselSource.entities.resumeEvents();
     }
 
     updateWildfires(fires) {
@@ -329,33 +351,14 @@ class TacticalLayersManager {
 
     updateCameras(cams) {
         if (!this.visibility.cameras || !cams || !cams.length) return;
-        if (this.cameraSource.entities.values.length >= cams.length && cams.length > 0) return;
+        if (this.cameraSource.entities.values.length > 0) return;
 
         this.cameraSource.entities.suspendEvents();
-        const existingIds = new Set(this.cameraSource.entities.values.map(e => e.id));
-
-        const landmarkCondition = new Cesium.DistanceDisplayCondition(0, 36000000.0);
-        const corridorCondition = new Cesium.DistanceDisplayCondition(0, 9500000.0);
-        const municipalCondition = new Cesium.DistanceDisplayCondition(0, 3800000.0);
-
         const icon = this._getCameraIcon();
+        const maxGlobeCams = Math.min(cams.length, 250);
 
-        for (let i = 0; i < cams.length; i++) {
+        for (let i = 0; i < maxGlobeCams; i++) {
             const cam = cams[i];
-            if (existingIds.has(cam.id)) continue;
-            existingIds.add(cam.id);
-
-            // Level of Detail (LOD):
-            // - Hubs / high priority / famous landmarks visible globally from orbit
-            // - Metropolitan corridors visible below 9.5M meters
-            // - Dense municipal & highway CCTV visible below 3.8M meters
-            let distCond = municipalCondition;
-            if (cam.is_hub || cam.priority === 'high' || i < 120 || cam.id.startsWith('cam-tokyo-') || cam.id.startsWith('cam-nyc-') || cam.id.startsWith('cam-london-')) {
-                distCond = landmarkCondition;
-            } else if (cam.stream_type === 'youtube' || cam.direction === 'Plaza Overview' || cam.direction === 'Waterfront Vista') {
-                distCond = corridorCondition;
-            }
-
             this.cameraSource.entities.add({
                 id: cam.id,
                 position: Cesium.Cartesian3.fromDegrees(cam.longitude, cam.latitude, 25),
@@ -363,8 +366,7 @@ class TacticalLayersManager {
                     image: icon,
                     scale: 0.85,
                     verticalOrigin: Cesium.VerticalOrigin.CENTER,
-                    heightReference: Cesium.HeightReference.NONE,
-                    distanceDisplayCondition: distCond
+                    heightReference: Cesium.HeightReference.NONE
                 },
                 properties: cam
             });
@@ -456,6 +458,7 @@ class TacticalLayersManager {
 
     updateSatellites(satellites) {
         if (!this.visibility.satellites || !satellites) return;
+        this.satelliteSource.entities.suspendEvents();
         this.satelliteSource.entities.removeAll();
 
         satellites.forEach(sat => {
@@ -488,6 +491,7 @@ class TacticalLayersManager {
                 });
             }
         });
+        this.satelliteSource.entities.resumeEvents();
     }
 
     toggleLayer(layerId, isVisible) {
@@ -513,40 +517,32 @@ class TacticalLayersManager {
 
         // Track drag state so we NEVER stall GPU with raycasting during camera orbit / pan
         let isMouseDown = false;
-        let lastPickTime = 0;
-        let pickPending = false;
+        // Debounced hover tooltips without GPU framebuffer stalling during cursor travel
+        let hoverTimer = null;
+        let currentHoverEntity = null;
 
-        handler.setInputAction(() => {
-            isMouseDown = true;
-            if (tooltip) {
-                tooltip.style.opacity = '0';
-                tooltip.style.display = 'none';
-            }
-        }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
-
-        handler.setInputAction(() => { isMouseDown = false; }, Cesium.ScreenSpaceEventType.LEFT_UP);
-        handler.setInputAction(() => { isMouseDown = true; if (tooltip) tooltip.style.display = 'none'; }, Cesium.ScreenSpaceEventType.MIDDLE_DOWN);
-        handler.setInputAction(() => { isMouseDown = false; }, Cesium.ScreenSpaceEventType.MIDDLE_UP);
-        handler.setInputAction(() => { isMouseDown = true; if (tooltip) tooltip.style.display = 'none'; }, Cesium.ScreenSpaceEventType.RIGHT_DOWN);
-        handler.setInputAction(() => { isMouseDown = false; }, Cesium.ScreenSpaceEventType.RIGHT_UP);
-
-        // Ultra-high performance throttled Hover Tooltips on all signs, markers, and country territories
         handler.setInputAction((movement) => {
             if (isMouseDown) return;
 
-            const now = performance.now();
-            if (now - lastPickTime < 45 || pickPending) return;
-            pickPending = true;
+            // Track cursor position smoothly for already-visible tooltip
+            if (tooltip && tooltip.style.display === 'block') {
+                tooltip.style.left = `${Math.min(window.innerWidth - 330, movement.endPosition.x + 16)}px`;
+                tooltip.style.top = `${Math.min(window.innerHeight - 100, movement.endPosition.y + 16)}px`;
+            }
 
-            requestAnimationFrame(() => {
-                pickPending = false;
-                lastPickTime = performance.now();
+            clearTimeout(hoverTimer);
+
+            // Execute scene.pick only when the user pauses their cursor (75ms hover threshold)
+            hoverTimer = setTimeout(() => {
                 if (isMouseDown) return;
+                if (this.viewer.camera && this.viewer.camera._currentFlight) return;
 
                 const picked = this.viewer.scene.pick(movement.endPosition);
                 if (Cesium.defined(picked) && picked.id) {
                     this.viewer.scene.canvas.style.cursor = 'pointer';
                     const entity = picked.id;
+                    if (entity === currentHoverEntity) return;
+                    currentHoverEntity = entity;
 
                     // Check if hovering over country boundary polygon
                     if (entity.customCountryData) {
@@ -639,6 +635,7 @@ class TacticalLayersManager {
                         tooltip.style.opacity = '1';
                     }
                 } else {
+                    currentHoverEntity = null;
                     this.viewer.scene.canvas.style.cursor = 'default';
                     if (window.mavenApp && window.mavenApp.countries) {
                         window.mavenApp.countries.clearHover();
@@ -648,7 +645,7 @@ class TacticalLayersManager {
                         tooltip.style.display = 'none';
                     }
                 }
-            });
+            }, 75);
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
         // Click handler with direct Street View and Country Dossier triggers

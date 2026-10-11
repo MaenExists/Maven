@@ -12,6 +12,7 @@ class TacticalDetectionMesh {
         this.ctx = null;
         this.active = false;
         this.animFrameId = null;
+        this.scratchCartesian2 = new Cesium.Cartesian2();
 
         this._initCanvas();
         this._bindKeyEvents();
@@ -120,7 +121,7 @@ class TacticalDetectionMesh {
             // Sample aircraft
             if (layers.flightSource && layers.flightSource.entities) {
                 const flValues = layers.flightSource.entities.values;
-                const count = Math.min(flValues.length, 60); // Cap to 60 for 60 FPS performance
+                const count = Math.min(flValues.length, 30);
                 for (let i = 0; i < count; i++) {
                     entities.push({ entity: flValues[i], type: 'flight' });
                 }
@@ -129,7 +130,7 @@ class TacticalDetectionMesh {
             // Sample vessels
             if (layers.vesselSource && layers.vesselSource.entities) {
                 const vsValues = layers.vesselSource.entities.values;
-                const count = Math.min(vsValues.length, 30);
+                const count = Math.min(vsValues.length, 15);
                 for (let i = 0; i < count; i++) {
                     entities.push({ entity: vsValues[i], type: 'vessel' });
                 }
@@ -143,8 +144,8 @@ class TacticalDetectionMesh {
             }
         }
 
-        const now = Cesium.JulianDate.now();
-        const scratchCartesian2 = new Cesium.Cartesian2();
+        const now = this.viewer.clock ? this.viewer.clock.currentTime : Cesium.JulianDate.now();
+        const scratchCartesian2 = this.scratchCartesian2;
 
         ctx.font = '9px "JetBrains Mono", monospace';
         ctx.textBaseline = 'top';

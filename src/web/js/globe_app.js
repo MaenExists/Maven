@@ -49,18 +49,28 @@ class MavenGlobeApp {
             }
         });
 
-        // Cap resolution scale to prevent GPU overload on 2K/4K high-DPI displays
-        this.viewer.resolutionScale = Math.min(window.devicePixelRatio || 1.0, 1.25);
+        // 1:1 Direct hardware blit (avoids super-sampling GPU fill-rate penalty)
+        this.viewer.resolutionScale = 1.0;
+        this.viewer.targetFrameRate = 60;
 
         const scene = this.viewer.scene;
         const globe = scene.globe;
 
+        // Disable heavy atmospheric raymarching passes for massive framerate boost
+        if (scene.skyAtmosphere) scene.skyAtmosphere.show = false;
+        if (globe.showGroundAtmosphere !== undefined) globe.showGroundAtmosphere = false;
+        if (scene.fog) scene.fog.enabled = false;
+        if (scene.sun) scene.sun.show = false;
+        if (scene.moon) scene.moon.show = false;
+
         // Visual and rendering tuning for ultra-high framerates
         globe.baseColor = Cesium.Color.fromCssColorString('#0a1120');
         globe.enableLighting = this.sunLightingEnabled;
-        globe.maximumScreenSpaceError = 2.5; // High-efficiency tile streaming
+        globe.maximumScreenSpaceError = 3.0; // High-efficiency tile streaming
         globe.depthTestAgainstTerrain = false; // Disable heavy terrain collision tests
-        globe.tileCacheSize = 120;
+        globe.tileCacheSize = 100;
+        globe.preloadAncestors = false;
+        globe.preloadSiblings = false;
         scene.highDynamicRange = false;
         scene.backgroundColor = Cesium.Color.fromCssColorString('#030712');
 
@@ -253,46 +263,65 @@ class MavenGlobeApp {
     }
 
     async startDataPolling() {
-        const fetchAll = async () => {
+        // 1. High-frequency dynamic telemetry (flights, vessels, satellites, anomalies)
+        const fetchDynamic = async () => {
             try {
-                const [flightsRes, vesselsRes, firesRes, quakesRes, camsRes, confRes, weatherRes, anomRes, satsRes] = await Promise.all([
+                const [flightsRes, vesselsRes, anomRes, satsRes] = await Promise.all([
                     fetch('/api/flights').then(r => r.json()).catch(() => ({ data: [] })),
                     fetch('/api/vessels').then(r => r.json()).catch(() => ({ data: [] })),
-                    fetch('/api/wildfires').then(r => r.json()).catch(() => ({ data: [] })),
-                    fetch('/api/earthquakes').then(r => r.json()).catch(() => ({ data: [] })),
-                    fetch('/api/cameras').then(r => r.json()).catch(() => ({ data: [] })),
-                    fetch('/api/conflicts').then(r => r.json()).catch(() => ({ data: [] })),
-                    fetch('/api/weather').then(r => r.json()).catch(() => ({ data: [] })),
                     fetch('/api/anomalies').then(r => r.json()).catch(() => ({ data: [] })),
                     fetch('/api/satellites').then(r => r.json()).catch(() => ({ data: [] })),
                 ]);
 
                 if (flightsRes.data) this.layers.updateFlights(flightsRes.data);
                 if (vesselsRes.data) this.layers.updateVessels(vesselsRes.data);
-                if (firesRes.data) this.layers.updateWildfires(firesRes.data);
-                if (quakesRes.data) this.layers.updateEarthquakes(quakesRes.data);
-                if (camsRes.data) this.layers.updateCameras(camsRes.data);
-                if (confRes.data) this.layers.updateConflicts(confRes.data);
-                if (weatherRes.data) this.weatherLayer.updateWeatherGrid(weatherRes.data);
                 if (anomRes.data) this.layers.updateAnomalies(anomRes.data);
                 if (satsRes.data) this.layers.updateSatellites(satsRes.data);
 
                 this._updateCounters({
                     flights: flightsRes.count || 0,
                     vessels: vesselsRes.count || 0,
-                    fires: firesRes.count || 0,
-                    quakes: quakesRes.count || 0,
-                    cameras: camsRes.count || 0,
                     anomalies: anomRes.count || 0,
                     satellites: satsRes.count || 0
                 });
             } catch (e) {
-                console.warn('Telemetry polling error:', e);
+                console.warn('Dynamic telemetry polling error:', e);
             }
         };
 
-        await fetchAll();
-        setInterval(fetchAll, 12000);
+        // 2. Low-frequency static / environmental updates (cameras, earthquakes, fires, conflicts, weather)
+        const fetchStatic = async () => {
+            try {
+                const [camsRes, quakesRes, firesRes, confRes, weatherRes] = await Promise.all([
+                    fetch('/api/cameras?limit=300').then(r => r.json()).catch(() => ({ data: [] })),
+                    fetch('/api/earthquakes').then(r => r.json()).catch(() => ({ data: [] })),
+                    fetch('/api/wildfires').then(r => r.json()).catch(() => ({ data: [] })),
+                    fetch('/api/conflicts').then(r => r.json()).catch(() => ({ data: [] })),
+                    fetch('/api/weather').then(r => r.json()).catch(() => ({ data: [] })),
+                ]);
+
+                if (camsRes.data) this.layers.updateCameras(camsRes.data);
+                if (quakesRes.data) this.layers.updateEarthquakes(quakesRes.data);
+                if (firesRes.data) this.layers.updateWildfires(firesRes.data);
+                if (confRes.data) this.layers.updateConflicts(confRes.data);
+                if (weatherRes.data) this.weatherLayer.updateWeatherGrid(weatherRes.data);
+
+                this._updateCounters({
+                    cameras: camsRes.count || 0,
+                    quakes: quakesRes.count || 0,
+                    fires: firesRes.count || 0
+                });
+            } catch (e) {
+                console.warn('Static layer polling error:', e);
+            }
+        };
+
+        await fetchDynamic();
+        await fetchStatic();
+
+        // Dynamic telemetry every 10s; Static environmental layers every 60s
+        setInterval(fetchDynamic, 10000);
+        setInterval(fetchStatic, 60000);
     }
 
     _bindGlobalHotkeys() {
@@ -433,6 +462,7 @@ class MavenGlobeApp {
 
     _updateCounters(counts) {
         const updateElem = (id, val) => {
+            if (val === undefined) return;
             const el = document.getElementById(id);
             if (el) el.textContent = val;
         };
@@ -442,6 +472,7 @@ class MavenGlobeApp {
         updateElem('countQuakes', counts.quakes);
         updateElem('countCams', counts.cameras);
         updateElem('countAnomalies', counts.anomalies);
+        updateElem('countSatellites', counts.satellites);
     }
 
     async loadInitialGeofences() {

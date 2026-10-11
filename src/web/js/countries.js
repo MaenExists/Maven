@@ -81,27 +81,12 @@ class CountriesLayerManager {
     }
 
     highlightCountryOnHover(entity) {
-        if (this.hoveredEntity === entity) return;
-
-        // Reset previous hovered country (unless it is currently selected)
-        if (this.hoveredEntity && this.hoveredEntity !== this.selectedEntity && this.hoveredEntity.polygon) {
-            this.hoveredEntity.polygon.material = Cesium.Color.fromCssColorString('#00f0ff').withAlpha(0.01);
-            this.hoveredEntity.polygon.outlineColor = Cesium.Color.fromCssColorString('#00f0ff').withAlpha(0.55);
-        }
-
+        // Highlighting country polygon fill forces CPU geometry re-tessellation in Cesium.
+        // We track the reference without re-generating geometry for lag-free cursor tracking.
         this.hoveredEntity = entity;
-
-        if (entity && entity !== this.selectedEntity && entity.polygon) {
-            entity.polygon.material = Cesium.Color.fromCssColorString('#00f0ff').withAlpha(0.18);
-            entity.polygon.outlineColor = Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.9);
-        }
     }
 
     clearHover() {
-        if (this.hoveredEntity && this.hoveredEntity !== this.selectedEntity && this.hoveredEntity.polygon) {
-            this.hoveredEntity.polygon.material = Cesium.Color.fromCssColorString('#00f0ff').withAlpha(0.01);
-            this.hoveredEntity.polygon.outlineColor = Cesium.Color.fromCssColorString('#00f0ff').withAlpha(0.55);
-        }
         this.hoveredEntity = null;
     }
 

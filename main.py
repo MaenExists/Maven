@@ -60,7 +60,13 @@ def run_gui_app(host: str, port: int) -> None:
         "--enable-accelerated-video-decode "
         "--enable-accelerated-2d-canvas "
         "--disable-background-timer-throttling "
-        "--num-raster-threads=4"
+        "--num-raster-threads=4 "
+        "--enable-features=VaapiVideoDecoder,CanvasOopRasterization "
+        "--enable-oop-rasterization "
+        "--disable-breakpad "
+        "--disable-speech-api "
+        "--disable-print-preview "
+        "--disable-extensions"
     )
 
     # Initialize QtWebEngine runtime
